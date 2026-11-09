@@ -1,0 +1,41 @@
+name: Held-out Git evidence reuse falsification
+
+on:
+  push:
+    branches: [research/native-contract-ci-evidence]
+    paths:
+      - research/ci_evidence/heldout.py
+      - .github/workflows/native-evidence-heldout.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Execute held-out historical oracles and adversarial Git changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/ci_evidence/heldout.py \
+            --protocol research/contract_poset/falsification_preregistration.json \
+            --checkout-root "$RUNNER_TEMP/heldout-repos" \
+            --history-count 20 \
+            --output "$RUNNER_TEMP/heldout-observed.json"
+      - name: Keep complete observations even on falsification
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: heldout-source-reuse-observations
+          path: ${{ runner.temp }}/heldout-observed.json
+          if-no-files-found: warn
+          retention-days: 30

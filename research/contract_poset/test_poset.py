@@ -49,7 +49,7 @@ class IdealLatticeTests(unittest.TestCase):
         self.assertEqual(reader & writer, {"foundation"})
         self.assertEqual(reader | writer, composition)
         self.assertTrue(is_ideal(composition, self.closure))
-        self.assertFalse(is_ideal(composition | {"composition"} - {"writer"}, self.closure))
+        self.assertFalse(is_ideal((composition | {"composition"}) - {"writer"}, self.closure))
 
     def test_cover_edges_remove_transitive_dependencies(self) -> None:
         graph = {**self.graph, "composition": {"foundation", "reader", "writer"}}

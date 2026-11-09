@@ -1,0 +1,87 @@
+name: Verify discovered contract candidates
+
+on:
+  push:
+    branches: [research/synthetic-history-evidence]
+    paths:
+      - .github/workflows/contract-candidate-verify.yml
+      - research/contract_verify/verify.py
+      - research/contract_verify/test_verify.py
+      - research/contract_verify/oracles/**
+      - research/contract_discovery/discover.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bounded-verification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Test evidence classifications with unrelated package
+        run: |
+          PYTHONPATH="$GITHUB_WORKSPACE/research/contract_discovery:$GITHUB_WORKSPACE/research/contract_verify" \
+            python -m unittest -v test_verify
+      - name: Analyze and verify pinned upstream h11 without modifying source
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_ref=62c5068c971579d61fa1b55373390e12f25fd856
+          git worktree add --detach "$RUNNER_TEMP/original_h11" "$source_ref"
+          python research/contract_discovery/discover.py \
+            "$RUNNER_TEMP/original_h11" --package h11 \
+            --output "$RUNNER_TEMP/discovery.json"
+          python research/contract_verify/verify.py "$RUNNER_TEMP/original_h11" \
+            --discovery "$RUNNER_TEMP/discovery.json" \
+            --output "$RUNNER_TEMP/without-oracles.json"
+          python research/contract_verify/verify.py "$RUNNER_TEMP/original_h11" \
+            --discovery "$RUNNER_TEMP/discovery.json" \
+            --plan research/contract_verify/oracles/plan.json \
+            --oracles research/contract_verify/oracles \
+            --output "$RUNNER_TEMP/with-oracles.json"
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          root=Path(os.environ["RUNNER_TEMP"])
+          absent=json.loads((root/"without-oracles.json").read_text())
+          assert len(absent["candidates"]) == 1
+          assert absent["candidates"][0]["status"] == "INSUFFICIENT_EVIDENCE"
+          assert absent["candidates"][0]["cases"] == []
+          present=json.loads((root/"with-oracles.json").read_text())
+          assert present["source_mismatches"] == []
+          assert len(present["candidates"]) == 1
+          candidate=present["candidates"][0]
+          assert candidate["status"] == "VERIFIED_WITHIN_SCOPE", candidate
+          cases=candidate["cases"]
+          assert len(cases) == 3
+          assert all(case["status"] == "VERIFIED_WITHIN_SCOPE" for case in cases)
+          assert sum(len(case["mutations"]) for case in cases) == 8
+          assert all(m["result"] == "KILLED" for case in cases for m in case["mutations"])
+          assert all(case["baseline"]["tests"] > 0 for case in cases)
+          print("No-oracle verdict:", absent["candidates"][0]["status"])
+          print("With-oracle verdict:", candidate["status"])
+          for case in cases:
+              print(case["id"],case["status"],len(case["mutations"]),"semantic mutants killed")
+          digest=hashlib.sha256((root/"with-oracles.json").read_bytes()).hexdigest()
+          print("Full report SHA-256:",digest)
+          with open(os.environ["GITHUB_STEP_SUMMARY"],"a") as output:
+              output.write("## Bounded contract verification\n\n")
+              output.write("Candidate discovered without a contract ledger: h11._readers and h11._writers.\n\n")
+              output.write("| Case | Original oracle | Targeted mutants |\n| --- | --- | --- |\n")
+              for case in cases:
+                  output.write(f"| {case['id']} | PASS | {len(case['mutations'])}/{len(case['mutations'])} killed |\n")
+              output.write("\nWithout independent oracles: INSUFFICIENT_EVIDENCE.\n\n")
+              output.write("With independent oracles: VERIFIED_WITHIN_SCOPE.\n\n")
+              output.write("Full result JSON SHA-256: "+digest+".\n\n")
+              output.write("Finite tests are bounded evidence and do not prove full HTTP correctness.\n")
+          PY
+          test -z "$(git -C "$RUNNER_TEMP/original_h11" status --porcelain)"
+          test "$(git -C "$RUNNER_TEMP/original_h11" rev-parse HEAD^{tree})" = \
+            "5a1cacdb9d0d6e8d18e8161924ae18130da6c130"

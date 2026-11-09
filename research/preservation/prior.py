@@ -91,8 +91,8 @@ def bind(source: Path, prior: Path, metadata: dict[str, Any],
             {
                 "previous_claim": READER,
                 "new_claim": "chunked.reader.bounded",
-                "rule": "prior source dependency manifest is unchanged",
-                "transfer_status": "RETAINED_BY_IDENTICAL_DECLARED_DEPENDENCIES",
+                "rule": "prior source dependency manifest validates the original baseline, not the modified candidate",
+                "transfer_status": "VALID_AT_UNMODIFIED_BASELINE_ONLY",
                 "scope": "existing reader test inputs and environment bound by prior manifest",
             },
             {

@@ -4,7 +4,7 @@ on:
   push:
     branches: [research/reader-frame]
     paths:
-      - .github/workflows/universal-contract-preservation.yml
+      - .github/workflows/sealed-reader-frame.yml
       - research/preservation/**
   workflow_dispatch:
 

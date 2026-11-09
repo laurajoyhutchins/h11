@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "description": "Independent chunked-codec oracles; never supplied to source-only discover() or inferred from class names",
+  "cases": [
+    {
+      "id": "chunked-reader-wire",
+      "candidate": "h11._connection|h11._readers|h11._writers",
+      "modules": [
+        "h11._readers"
+      ],
+      "oracle": "reader_oracles.py",
+      "support": [
+        "fixtures.py"
+      ],
+      "claims": [
+        "Valid chunked bodies decode exactly, independent of segmentation",
+        "Malformed chunks and premature EOF are rejected",
+        "Trailer headers are preserved"
+      ],
+      "mutations": [
+        {
+          "id": "chunk-length-plus-one",
+          "module": "h11._readers",
+          "search": "self._bytes_in_chunk = int(matches[\"chunk_size\"], base=16)",
+          "replace": "self._bytes_in_chunk = int(matches[\"chunk_size\"], base=16) + 1"
+        },
+        {
+          "id": "discard-only-lf",
+          "module": "h11._readers",
+          "search": "self._bytes_to_discard = b\"\\r\\n\"",
+          "replace": "self._bytes_to_discard = b\"\\n\""
+        },
+        {
+          "id": "drop-trailers",
+          "module": "h11._readers",
+          "search": "return EndOfMessage(headers=list(_decode_header_lines(lines)))",
+          "replace": "return EndOfMessage()"
+        }
+      ]
+    },
+    {
+      "id": "chunked-writer-wire",
+      "candidate": "h11._connection|h11._readers|h11._writers",
+      "modules": [
+        "h11._writers"
+      ],
+      "oracle": "writer_oracles.py",
+      "support": [
+        "fixtures.py"
+      ],
+      "claims": [
+        "Data events are framed with exact hexadecimal lengths and CRLF",
+        "Empty data emits no chunk",
+        "Final zero chunk and trailers are encoded exactly"
+      ],
+      "mutations": [
+        {
+          "id": "chunk-length-plus-one",
+          "module": "h11._writers",
+          "search": "write(b\"%x\\r\\n\" % len(data))",
+          "replace": "write(b\"%x\\r\\n\" % (len(data) + 1))"
+        },
+        {
+          "id": "omit-data-footer-cr",
+          "module": "h11._writers",
+          "search": "write(data)\n        write(b\"\\r\\n\")",
+          "replace": "write(data)\n        write(b\"\\n\")"
+        },
+        {
+          "id": "wrong-terminal-chunk",
+          "module": "h11._writers",
+          "search": "write(b\"0\\r\\n\")",
+          "replace": "write(b\"1\\r\\n\")"
+        }
+      ]
+    },
+    {
+      "id": "chunked-codec-composition",
+      "candidate": "h11._connection|h11._readers|h11._writers",
+      "modules": [
+        "h11._readers",
+        "h11._writers"
+      ],
+      "oracle": "composition_oracles.py",
+      "support": [
+        "fixtures.py",
+        "reader_oracles.py"
+      ],
+      "claims": [
+        "For bounded body vectors, reader(writer(data)) recovers data and terminates"
+      ],
+      "mutations": [
+        {
+          "id": "composition-reader-length-plus-one",
+          "module": "h11._readers",
+          "search": "self._bytes_in_chunk = int(matches[\"chunk_size\"], base=16)",
+          "replace": "self._bytes_in_chunk = int(matches[\"chunk_size\"], base=16) + 1"
+        },
+        {
+          "id": "composition-writer-length-plus-one",
+          "module": "h11._writers",
+          "search": "write(b\"%x\\r\\n\" % len(data))",
+          "replace": "write(b\"%x\\r\\n\" % (len(data) + 1))"
+        }
+      ]
+    }
+  ]
+}

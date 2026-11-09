@@ -1,0 +1,50 @@
+name: Verify contract-generated Git history
+
+on:
+  push:
+    branches: [research/synthetic-history-evidence]
+    paths: [.github/workflows/contract-generated-verify.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Verify deterministic materialization and DAG
+        run: python research/contract_history/verify_materialization.py
+      - name: Verify independent contracts and kill semantic mutants
+        run: |
+          python research/contract_history/verify_contracts.py \
+            --commits research/contract_history/generated_commits.json \
+            --mutations > /tmp/contract-results.json
+          cat /tmp/contract-results.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          results=json.loads(Path("/tmp/contract-results.json").read_text())["checks"]
+          assert len(results)==9
+          assert sum(x["result"]=="PASS" for x in results)==3
+          assert sum(x["result"]=="KILLED" for x in results)==6
+          with open(__import__("os").environ["GITHUB_STEP_SUMMARY"],"a") as out:
+              out.write("## Contract-first reconstruction\n\n")
+              out.write("Reproduced all six Git trees and checked their parents, dependency closures, and exact final source identity.\n\n")
+              out.write("| Contract | Original | Semantic mutants |\n| --- | --- | --- |\n")
+              for c in ("reader","writer","composition"):
+                  xs=[x for x in results if x["contract"].endswith("."+c)]
+                  out.write(f"| {c} | {'PASS' if xs[0]['result']=='PASS' else 'FAIL'} | {sum(x['result']=='KILLED' for x in xs[1:])}/{len(xs)-1} killed |\n")
+          PY
+      - name: Run original h11 tests at reconstructed final tree
+        run: |
+          git checkout --quiet --detach e8d9391373d3ae3234abe4fe24d2ad0bc8116a81
+          python -m pip install pytest==9.0.2
+          python -m pytest -q h11/tests

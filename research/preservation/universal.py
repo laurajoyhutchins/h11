@@ -97,12 +97,25 @@ def certificate(data: dict, work: Path) -> dict:
                 "fresh_candidate_reader_executions": 0,
             },
         ],
+        "documented_python_semantics": {
+            "python_version": "3.13",
+            "source": bridged["python_language_specification"],
+            "scope": (
+                "Standard bytes truth/length, lowercase %x formatting, "
+                "nonnegative integer bitwise and shift, bytearray mutation "
+                "and documented expression evaluation order"
+            ),
+            "status": "DOCUMENTED_LANGUAGE_OPERATIONS_NOT_KERNEL_PROVED",
+        },
         "trusted_assumptions": [
-            "Standard nonnegative CPython integer bitwise and %x formatting semantics",
-            "bytes input and nonthrowing ordered callback",
-            "matching Python execution environment; unchanged reader implementation; "
-            "no reader reflection on writer method identity or import-time effects",
-            "prior unsigned Test Result authenticated via GitHub Actions run metadata",
+            "Interpreter conforms to cited Python 3.13 built-in language semantics",
+            "Data.data is genuine bytes, not an h11-supported sendfile-style proxy",
+            "The write callback observes only byte argument values/order, does not "
+            "throw, mutate payload, inspect frames, or distinguish resource usage",
+            "Reader behavior is independent of the modified writer method body "
+            "and import/cache/introspection effects; this frame condition is unproved",
+            "Runtime environment and prior finite reader inputs match those recorded",
+            "Prior unsigned Test Result authenticated via GitHub Actions metadata",
         ],
         "limits": (
             "Universal theorem concerns writer callback traces only; reader "

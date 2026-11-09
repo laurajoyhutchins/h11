@@ -57,7 +57,7 @@ def patch_bytes(baseline: Path, candidate: Path) -> bytes:
 def recheck(work: Path, baseline: Path, candidate: Path) -> dict:
     saved = strict_json(work / "preservation.json")
     recomputed = make_certificate(
-        candidate, baseline, candidate,
+        baseline, candidate,
         strict_json(work / "baseline-observations.json"),
         strict_json(work / "candidate-observations.json"),
     )

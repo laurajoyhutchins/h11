@@ -1,0 +1,83 @@
+name: Compare ranked versus largest-tested selection
+
+on:
+  push:
+    branches: [research/synthetic-history-evidence]
+    paths:
+      - .github/workflows/compare-selection.yml
+      - research/selection/compare.py
+      - research/selection/test_compare.py
+      - research/selection/select.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  equal-budget:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Test comparison rules against unrelated fixture
+        env:
+          PYTHONPATH: research/selection:research/transfer
+        run: |
+          python -m unittest -v test_compare
+          python -m unittest -v test_select
+      - name: Run equal-budget fault injections on pinned original h11
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install pytest==9.0.2
+          git worktree add --detach "$RUNNER_TEMP/source" 62c5068c971579d61fa1b55373390e12f25fd856
+          python research/contract_discovery/discover_v2.py \
+            "$RUNNER_TEMP/source" --package h11 --tests h11/tests \
+            --output "$RUNNER_TEMP/discovery.json"
+          PYTHONPATH="$GITHUB_WORKSPACE/research/selection:$GITHUB_WORKSPACE/research/transfer" \
+            python research/selection/compare.py "$RUNNER_TEMP/source" \
+              --discovery "$RUNNER_TEMP/discovery.json" \
+              --revision 62c5068c971579d61fa1b55373390e12f25fd856 \
+              --output "$RUNNER_TEMP/comparison.json"
+          python research/contract_history/verify_contracts.py \
+            --commits research/contract_history/generated_commits.json \
+            --mutations > "$RUNNER_TEMP/independent-bank.json"
+          python - <<'PY'
+          import hashlib,json,os,pathlib
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])
+          x=json.loads((root/"comparison.json").read_text())
+          bank=json.loads((root/"independent-bank.json").read_text())
+          assert x["baseline_pytest"]["verdict"]=="PASS"
+          assert all(m["result"] in ("PASS","KILLED") for m in bank["checks"])
+          assert sum(m["result"]=="KILLED" for m in bank["checks"])==6
+          assert sum(m["result"]=="PASS" for m in bank["checks"])==3
+          for key, arm in x["results"].items():
+              assert len(arm["selections"])==3,(key,arm)
+              assert arm["actual_mutation_trials"] <= 9,(key,arm)
+              assert (arm["detected_by_original_tests"] + arm["survived_original_tests"] +
+                      arm["invalid_or_uninterpretable"] == arm["actual_mutation_trials"])
+          print("VERIFICATION_BANK: 3/3 baseline oracles and 6/6 targeted semantic mutations")
+          print("CONTROLLED_CALIBRATION_SUMMARY",json.dumps(x["results"],sort_keys=True))
+          print("FULL_CALIBRATION_SHA256",hashlib.sha256((root/"comparison.json").read_bytes()).hexdigest())
+          with open(os.environ["GITHUB_STEP_SUMMARY"],"a") as s:
+              s.write("## Equal-budget h11 selection calibration\n\n")
+              s.write("Pinned original h11; full original pytest suite for every fault.\n\n")
+              s.write("| Arm | Selection modules | Faults | Detected | Survived | Invalid | Independent codec oracle coverage |\n")
+              s.write("| --- | --- | ---: | ---: | ---: | ---: | ---: |\n")
+              for key, arm in x["results"].items():
+                  chosen=", ".join(y["module"].split(".")[-1] for y in arm["selections"])
+                  s.write(f"| {key} | {chosen} | {arm['actual_mutation_trials']} | {arm['detected_by_original_tests']} | {arm['survived_original_tests']} | {arm['invalid_or_uninterpretable']} | {arm['known_oracle_bank_coverage']}/2 |\n")
+              s.write("\nIndependent bank checked separately: 3/3 oracles pass, 6/6 codec-specific mutants detected.\n")
+              s.write("\nOriginal pytest test failures are **not independent semantic verification**.\n")
+              s.write("\nFull report SHA-256: "+hashlib.sha256((root/"comparison.json").read_bytes()).hexdigest()+".\n")
+          PY
+          cat "$RUNNER_TEMP/comparison.json"
+          test -z "$(git -C "$RUNNER_TEMP/source" status --porcelain)"
+          test "$(git -C "$RUNNER_TEMP/source" rev-parse HEAD^{tree})" = \
+            5a1cacdb9d0d6e8d18e8161924ae18130da6c130

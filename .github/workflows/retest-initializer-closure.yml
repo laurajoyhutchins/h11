@@ -1,0 +1,135 @@
+name: Re-test frozen falsification with generated Python initializer dependencies
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/synthetic-history-evidence]
+    paths:
+      - .github/workflows/retest-initializer-closure.yml
+      - research/contract_poset/falsification.py
+      - research/contract_poset/test_initializer_closure.py
+      - research/contract_poset/falsification_preregistration.json
+
+permissions:
+  contents: read
+
+jobs:
+  retest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Unit-test generated initializer closure
+        run: |
+          PYTHONPATH=research/contract_poset python -m unittest -v test_initializer_closure
+      - name: Run frozen control and corrected evaluator on identical revisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          protocol=research/contract_poset/falsification_preregistration.json
+          python research/contract_poset/falsification.py \
+            --protocol "$protocol" \
+            --checkout-root "$RUNNER_TEMP/control" \
+            --output "$RUNNER_TEMP/control.json"
+          python research/contract_poset/falsification.py \
+            --protocol "$protocol" \
+            --checkout-root "$RUNNER_TEMP/corrected" \
+            --include-package-initializers \
+            --output "$RUNNER_TEMP/corrected.json"
+          python - <<'PY'
+          import hashlib,json,os,pathlib
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])
+          a=json.loads((root/"control.json").read_text())
+          b=json.loads((root/"corrected.json").read_text())
+          assert a["dependency_model"]=="static_imports_only"
+          assert b["dependency_model"]=="static_imports_plus_implicit_package_initializers"
+          assert a["protocol_sha256"]==b["protocol_sha256"]
+          assert a["total_historical_revisions_requested"]==b["total_historical_revisions_requested"]==210
+          assert a["total_adversarial_revisions"]==b["total_adversarial_revisions"]==3
+          assert a["assessable_revisions"]==b["assessable_revisions"]
+          assert a["unassessable_revisions"]==b["unassessable_revisions"]
+          assert a["missed_observable_changes"]==3
+          assert b["missed_observable_changes"]==0
+          assert a["assessable_revisions"]==157
+          for old,new in zip(a["per_repository"],b["per_repository"],strict=True):
+              assert old["repository"]==new["repository"]
+              assert old["source_commit"]==new["source_commit"]
+              assert len(old["observations"])==len(new["observations"])==71
+              path="src/"+old["repository"].split("/")[-1]+"/__init__.py"
+              assert path not in old["source_closure_paths"]
+              assert path in new["source_closure_paths"]
+              assert set(old["source_closure_paths"])<=set(new["source_closure_paths"])
+              for o,n in zip(old["observations"],new["observations"],strict=True):
+                  assert o["label"]==n["label"]
+                  if o["label"]!="adversarial-initializer":
+                      assert o["commit"]==n["commit"]
+                  assert o["assessable"]==n["assessable"], (old["repository"],o["label"])
+                  if o["assessable"]:
+                      assert o["observation"]==n["observation"],(old["repository"],o["label"])
+                      assert o["behavior_changed"]==n["behavior_changed"]
+              assert old["observations"][-1]["verdict"]=="REUSE"
+              assert new["observations"][-1]["verdict"]=="REVERIFY"
+              assert old["observations"][-1]["missed_change"] is True
+              assert new["observations"][-1]["missed_change"] is False
+              assert new["observations"][-1]["behavior_changed"] is True
+              assert path in new["observations"][-1]["changed_tracked_paths"]
+          per=[]
+          for old,new in zip(a["per_repository"],b["per_repository"],strict=True):
+              row={"repository":old["repository"],
+                   "historical_compared":70,
+                   "assessable":new["totals"]["assessable"],
+                   "unassessable":new["totals"]["unassessable"],
+                   "old_closure_paths":len(old["source_closure_paths"]),
+                   "new_closure_paths":len(new["source_closure_paths"]),
+                   "control_misses":old["totals"]["misses"],
+                   "corrected_misses":new["totals"]["misses"],
+                   "control_estimated_savings":old["totals"]["counterfactual_savings_fraction"],
+                   "corrected_estimated_savings":new["totals"]["counterfactual_savings_fraction"],
+                   "initializer_change_reverified":new["observations"][-1]["verdict"]=="REVERIFY"}
+              per.append(row)
+          report={"schema_version":1,
+                  "frozen_protocol_sha256":a["protocol_sha256"],
+                  "control_script_run":"same runner, no correction flag",
+                  "corrected_script_run":"same runner, --include-package-initializers",
+                  "attempted":213,
+                  "assessable":b["assessable_revisions"],
+                  "unassessable":b["unassessable_revisions"],
+                  "control_misses":a["missed_observable_changes"],
+                  "corrected_misses":b["missed_observable_changes"],
+                  "control_savings":a["counterfactual_savings_fraction"],
+                  "corrected_savings":b["counterfactual_savings_fraction"],
+                  "per_repository":per,
+                  "interpretation":"Correction repairs three known package-init counterexamples. Zero measured misses does not prove full semantic dependency completeness; original 56 unassessable histories remain unassessable.",
+                  "full_control_json_sha256":hashlib.sha256((root/"control.json").read_bytes()).hexdigest(),
+                  "full_corrected_json_sha256":hashlib.sha256((root/"corrected.json").read_bytes()).hexdigest()}
+          payload=json.dumps(report,sort_keys=True,indent=2)+"\n"
+          (root/"comparison.json").write_text(payload)
+          print("CORRECTED_COMPARISON",json.dumps(report,sort_keys=True))
+          print("CORRECTED_COMPARISON_SHA256",hashlib.sha256(payload.encode()).hexdigest())
+          with open(os.environ["GITHUB_STEP_SUMMARY"],"a") as out:
+              out.write("## Frozen protocol: implicit initializer closure correction\n\n")
+              out.write(f"Assessable: **{report['assessable']} / 213**; unassessable: **{report['unassessable']}**.\n\n")
+              out.write("| Repository | Control missed | Corrected missed | Control time saved | Corrected time saved |\n")
+              out.write("| --- | ---: | ---: | ---: | ---: |\n")
+              for v in per:
+                  out.write(f"| {v['repository']} | {v['control_misses']} | {v['corrected_misses']} | {v['control_estimated_savings']:.1%} | {v['corrected_estimated_savings']:.1%} |\n")
+              out.write("\nThe correction resolves all **three known initializer counterexamples**, not all possible dependency gaps.\n\n")
+              out.write("Full comparison SHA-256: "+hashlib.sha256(payload.encode()).hexdigest()+".\n")
+          PY
+      - name: Preserve full control, corrected, and comparison reports
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: initializer-closure-frozen-retest
+          path: |
+            ${{ runner.temp }}/control.json
+            ${{ runner.temp }}/corrected.json
+            ${{ runner.temp }}/comparison.json
+          if-no-files-found: warn
+          retention-days: 30

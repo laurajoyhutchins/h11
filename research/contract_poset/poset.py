@@ -247,7 +247,7 @@ def attach_contracts(contracts: dict, links: dict, verified: dict,
         spec = by_contract[name]
         evidence = by_verified[link["evidence_case"]]
         required_modules = set(link["modules"])
-        if not required_modules or not required_modules <= module_closure:
+        if not required_modules or not required_modules <= set(module_closure):
             raise ValueError("Contract modules absent from source poset: " + name)
         stage = by_stage[spec["introduced_at"]]
         if not required_modules <= set(stage["modules"]):

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from poset import (
     attach_contracts, blob_sha, covers, frontier, from_frontier,
-    git_objects, ideal_count, is_ideal, module_poset, validate_graph,
+    git_objects, ideal_count, is_ideal, module_poset, project_existing_refs, validate_graph,
 )
 
 
@@ -112,6 +112,48 @@ class GitIdentityTests(unittest.TestCase):
             objs = git_objects(repo, "HEAD")
             self.assertEqual(objs["p/mod.py"]["oid"], blob_sha(data))
             self.assertEqual(objs["p/mod.py"]["kind"], "blob")
+
+
+    def test_different_git_tree_same_module_ideal_and_changed_blob_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            def command(*args: str) -> str:
+                return subprocess.check_output(["git", "-C", str(repo), *args],
+                                               text=True).strip()
+            command("init", "-q")
+            command("config", "user.email", "research@example.invalid")
+            command("config", "user.name", "Research")
+            (repo / "p").mkdir()
+            original = b"answer = 42\n"
+            (repo / "p" / "mod.py").write_bytes(original)
+            command("add", "p/mod.py")
+            command("commit", "-qm", "original")
+            old_sha = command("rev-parse", "HEAD")
+            source = git_objects(repo, old_sha)
+            source_tree = command("rev-parse", "HEAD^{tree}")
+            (repo / "research.txt").write_text("evidence with unchanged source")
+            command("add", "research.txt")
+            command("commit", "-qm", "add research")
+            evidence_sha = command("rev-parse", "HEAD")
+            (repo / "p" / "mod.py").write_text("answer = 99\n")
+            command("add", "p/mod.py")
+            command("commit", "-qm", "source changed")
+            incompatible_sha = command("rev-parse", "HEAD")
+            discovery = {"production_modules": {
+                "p.mod": {"path": "p/mod.py", "blob_sha": blob_sha(original)}
+            }}
+            closure = {"p.mod": {"p.mod"}}
+            refs = project_existing_refs(repo,
+                                         [old_sha, evidence_sha, incompatible_sha],
+                                         discovery, source, closure, source_tree)
+            self.assertEqual([x["status"] for x in refs],
+                             ["PINNED_MODULE_IDEAL", "PINNED_MODULE_IDEAL",
+                              "INCOMPATIBLE_SOURCE_VERSION"])
+            self.assertTrue(refs[0]["same_tree_as_source"])
+            self.assertFalse(refs[1]["same_tree_as_source"])
+            self.assertEqual(refs[0]["ideal_id"], refs[1]["ideal_id"])
+            self.assertEqual(refs[1]["additional_paths_beyond_pinned_source"], 1)
+            self.assertEqual(refs[2]["changed_original_modules"], ["p.mod"])
 
 
 class ExplicitClaimsTests(unittest.TestCase):

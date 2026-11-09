@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "protocol": "research/contract_poset/falsification_preregistration.json",
+  "protocol_commit": "640352a1b16182e9f145a549c227fb650347c492",
+  "implementation": "research/contract_poset/falsification.py",
+  "workflow": "https://github.com/laurajoyhutchins/h11/actions/runs/42631274931",
+  "workflow_conclusion": "success",
+  "experiment_verdict": "FALSIFIED_IMPORT_ONLY_PREDICTOR",
+  "criterion": "Any one successful changed behavioral observation for a Git revision whose static AST import source closure is unchanged is a counterexample.",
+  "sample": {
+    "historical_planned": 210,
+    "historical_total_executed": 210,
+    "adversarial_planned": 3,
+    "adversarial_total_executed": 3,
+    "total_comparisons": 213,
+    "assessable": 157,
+    "unassessable": 56,
+    "assessable_historical": 154,
+    "assessable_adversarial": 3,
+    "missed_changes_total": 3,
+    "missed_changes_historical": 0,
+    "missed_changes_adversarial": 3
+  },
+  "estimated_performance": {
+    "counterfactual_verification_time_saved_fraction": 0.061956,
+    "target_fraction": 0.5,
+    "method": "sum observed all-oracle subprocess times for assessable revisions minus selected-target oracle times and measured index computation; checkout and clone overhead excluded",
+    "limitation": "Not a complete performance test under preregistration: 56 comparisons unassessable and only one oracle per repo, so savings estimate is descriptive."
+  },
+  "repositories": [
+    {
+      "repo": "pallets-eco/blinker",
+      "baseline": "c3364059663df1ddce32799d6b1922af89a345f6",
+      "assessable": 71,
+      "unassessable": 0,
+      "observed_misses": 1,
+      "estimated_savings_fraction": 0.037598,
+      "closure": [
+        "src/blinker/_utilities.py",
+        "src/blinker/base.py"
+      ],
+      "adversarial_revision": "7e0a6bb16dfe5c76c106a37f0c59af3c2c403fda",
+      "changed_path": "src/blinker/__init__.py",
+      "oracle_outcome": {
+        "receiver_count": 0,
+        "receivers": []
+      },
+      "predictor": "REUSE",
+      "changed_closure_paths": []
+    },
+    {
+      "repo": "python-hyper/hpack",
+      "baseline": "6aa8c0b2265f558f7184047aa09dcc573e625f82",
+      "assessable": 50,
+      "unassessable": 21,
+      "observed_misses": 1,
+      "estimated_savings_fraction": 0.128593,
+      "closure": [
+        "src/hpack/exceptions.py",
+        "src/hpack/hpack.py",
+        "src/hpack/huffman.py",
+        "src/hpack/huffman_constants.py",
+        "src/hpack/huffman_table.py",
+        "src/hpack/struct.py",
+        "src/hpack/table.py"
+      ],
+      "adversarial_revision": "49ebf8eab7c6c8adce947f9db101735cce310bcb",
+      "changed_path": "src/hpack/__init__.py",
+      "oracle_outcome": {
+        "decoded": [],
+        "encoded_hex": "",
+        "round_trip": false
+      },
+      "predictor": "REUSE",
+      "changed_closure_paths": []
+    },
+    {
+      "repo": "python-hyper/hyperframe",
+      "baseline": "632e309bf6d76d6a3cd04e3cbc0b006eddbf7056",
+      "assessable": 36,
+      "unassessable": 35,
+      "observed_misses": 1,
+      "estimated_savings_fraction": -0.056779,
+      "closure": [
+        "src/hyperframe/exceptions.py",
+        "src/hyperframe/flags.py",
+        "src/hyperframe/frame.py"
+      ],
+      "adversarial_revision": "c66462656201edea0b928ab2dcc3a0a12145f112",
+      "changed_path": "src/hyperframe/__init__.py",
+      "oracle_outcome": {
+        "encoded_hex": "000000000000000001",
+        "frame_length": 0,
+        "payload_hex": "",
+        "round_trip": false
+      },
+      "predictor": "REUSE",
+      "changed_closure_paths": []
+    }
+  ],
+  "full_ephemeral_report_sha256": "44116cfcb6bbe81e3aa6d741620b81ac3d9ab9d633d98095b139ad1bdc73f296",
+  "mathematical_counterexample": "Two revisions with the same tracked import-closure Git blob identity can have distinct observable behavior; therefore import-closure identity alone is insufficient to guarantee observational equivalence.",
+  "limitations": [
+    "Deliberately constructed adversarial modifications, not real defects discovered in the third-party projects.",
+    "Historical commits tested against newest pinned baseline and may include intentional API evolution; 56 were unassessable with Python 3.13 and the frozen oracle.",
+    "Standalone static-AST import-only predictor is the tested object; this does not rule out a stronger analysis that includes implicit package initialization or other runtime dependencies.",
+    "Previous h11 evidence index can accept explicitly expanded source closures. These results do not imply that all conceivable evidence indices are unsound.",
+    "Time savings estimate excludes clone and checkout costs and is not a benchmark of long-running independent contract suites.",
+    "The report was produced in GitHub CI; full result JSON SHA-256 is available in logs but not archived as an artifact.",
+    "Upstream repos and h11 master were not modified; adversarial Git commits existed only inside ephemeral CI runner."
+  ]
+}

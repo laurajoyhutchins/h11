@@ -1,0 +1,125 @@
+name: Blind frozen contract target selection on Jinja
+
+on:
+  push:
+    branches: [research/synthetic-history-evidence]
+    paths:
+      - .github/workflows/frozen-selection-transfer.yml
+      - research/selection/select.py
+      - research/selection/test_select.py
+      - research/contract_discovery/discover.py
+      - research/contract_discovery/discover_v2.py
+      - research/contract_verify/verify.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  select:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: pallets/jinja
+          ref: 5ef70112a1ff19c05324ff889dd30405b1002044
+          persist-credentials: false
+          path: heldout/jinja
+      - uses: actions/checkout@v4
+        with:
+          repository: pallets/click
+          ref: 8abb77a8432e03ed14a95f972b44f905279415a7
+          persist-credentials: false
+          path: heldout/click
+      - uses: actions/checkout@v4
+        with:
+          repository: pallets/itsdangerous
+          ref: 672971d66a2ef9f85151e53283113f33d642dabd
+          persist-credentials: false
+          path: heldout/itsdangerous
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Verify generic ranking, source discovery and prior classifications
+        run: |
+          PYTHONPATH=research/selection python -m unittest -v test_select
+          PYTHONPATH=research/contract_discovery python -m unittest -v test_discover test_discover_v2
+          PYTHONPATH=research/contract_discovery:research/contract_verify python -m unittest -v test_verify
+      - name: Run frozen source-only selection on all pinned checkouts
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree add --detach "$RUNNER_TEMP/h11-original" 62c5068c971579d61fa1b55373390e12f25fd856
+          test "$(git -C heldout/jinja rev-parse HEAD)" = 5ef70112a1ff19c05324ff889dd30405b1002044
+          test "$(git -C heldout/click rev-parse HEAD)" = 8abb77a8432e03ed14a95f972b44f905279415a7
+          test "$(git -C heldout/itsdangerous rev-parse HEAD)" = 672971d66a2ef9f85151e53283113f33d642dabd
+          for spec in "h11|$RUNNER_TEMP/h11-original|h11|.|h11/tests" \
+                      "itsdangerous|heldout/itsdangerous|itsdangerous|src|tests/test_itsdangerous" \
+                      "click|heldout/click|click|src|tests" \
+                      "jinja|heldout/jinja|jinja2|src|tests"; do
+            IFS='|' read -r label root package source_dir tests <<< "$spec"
+            python research/contract_discovery/discover_v2.py "$root" \
+              --package "$package" --source-dir "$source_dir" --tests "$tests" \
+              --output "$RUNNER_TEMP/$label-discovery.json"
+            python research/selection/select.py \
+              --discovery "$RUNNER_TEMP/$label-discovery.json" \
+              --budget 3 --output "$RUNNER_TEMP/$label-selected.json"
+            python research/selection/select.py \
+              --discovery "$RUNNER_TEMP/$label-discovery.json" \
+              --budget 3 --output "$RUNNER_TEMP/$label-selected-repeat.json"
+            cmp "$RUNNER_TEMP/$label-selected.json" "$RUNNER_TEMP/$label-selected-repeat.json"
+          done
+          python research/contract_verify/verify.py heldout/jinja \
+            --discovery "$RUNNER_TEMP/jinja-discovery.json" \
+            --output "$RUNNER_TEMP/jinja-no-oracles.json"
+          python - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          root=Path(os.environ["RUNNER_TEMP"])
+          data={}
+          for name in ("h11","itsdangerous","click","jinja"):
+              disc=json.loads((root/f"{name}-discovery.json").read_text())
+              raw=(root/f"{name}-selected.json").read_bytes()
+              selection=json.loads(raw)
+              assert len(selection["selected"])<=3
+              assert all(x["status"]=="INSUFFICIENT_EVIDENCE" for x in
+                         selection["all_candidates"]+selection["selected"])
+              assert len({tuple(s["focus_modules"]) for s in selection["selected"]})==len(selection["selected"])
+              count=sum(disc["candidate_counts"][key] for key in
+                        ("independent_siblings","test_exercised_modules","extension_boundaries"))
+              assert count==len(selection["all_candidates"])
+              data[name]={
+                  "modules":len(disc["production_modules"]),
+                  "all_candidates":count,
+                  "selected":[{"id":s["id"],"family":s["family"],
+                               "score":s["greedy_score"],"modules":s["focus_modules"],
+                               "test_import_witnesses":len(s["test_import_witnesses"])}
+                              for s in selection["selected"]],
+                  "selection_sha256":hashlib.sha256(raw).hexdigest()
+              }
+              print(name,json.dumps(data[name],sort_keys=True))
+          no_oracle=json.loads((root/"jinja-no-oracles.json").read_text())
+          assert no_oracle["source_mismatches"] == []
+          assert len(no_oracle["candidates"])==data["jinja"]["all_candidates"]
+          assert all(x["status"]=="INSUFFICIENT_EVIDENCE" for x in no_oracle["candidates"])
+          print("JINJA_NO_ORACLES:",len(no_oracle["candidates"]),"INSUFFICIENT_EVIDENCE")
+          with open(os.environ["GITHUB_STEP_SUMMARY"],"a") as out:
+              out.write("## Frozen verification-target prioritization\n\n")
+              out.write("Previously unseen holdout: pallets/jinja at 5ef70112a1ff19c05324ff889dd30405b1002044.\n\n")
+              out.write("| Repo | Modules | Candidates | Selected |\n| --- | ---: | ---: | ---: |\n")
+              for name,v in data.items():
+                  out.write(f"| {name} | {v['modules']} | {v['all_candidates']} | {len(v['selected'])} |\n")
+              out.write("\n### Jinja selection (structural evidence, not contracts)\n\n")
+              for item in data["jinja"]["selected"]:
+                  out.write(f"- {item['id']} ({item['family']}), score {item['score']}, imported by {item['test_import_witnesses']} test modules\n")
+              out.write("\n**All Jinja candidates remain INSUFFICIENT_EVIDENCE.** No independent oracle executed.\n\n")
+              out.write("Jinja selected JSON SHA-256: "+data["jinja"]["selection_sha256"]+".\n")
+          PY
+          for path in heldout/jinja heldout/click heldout/itsdangerous "$RUNNER_TEMP/h11-original"; do
+            test -z "$(git -C "$path" status --porcelain)"
+          done

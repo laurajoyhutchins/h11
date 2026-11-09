@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "experiment": "Repeat frozen import-closure falsification with Python interpreter-required package initializer edges",
+  "frozen_protocol": {
+    "path": "research/contract_poset/falsification_preregistration.json",
+    "original_commit_before_initial_results": "640352a1b16182e9f145a549c227fb650347c492",
+    "sha256": "c05b349d5a4d69189747550681434e44faf4eff6133f9ea54b3a5d6c7018e4eb",
+    "unchanged": true
+  },
+  "code": {
+    "path": "research/contract_poset/falsification.py",
+    "original_mode": "static_imports_only",
+    "corrected_opt_in": "--include-package-initializers",
+    "detail": "All existing parent package __init__.py source modules are treated as interpreter-required dependencies of importing each dotted module; transitive AST imports of these initializers are traversed",
+    "scope": "Python import semantics within pinned source package; not arbitrary runtime dynamism"
+  },
+  "ci": {
+    "run_url": "https://github.com/laurajoyhutchins/h11/actions/runs/42633777477",
+    "conclusion": "success",
+    "head_commit": "c414e538e82a4e11c8fb92073d7a89b89370f23f",
+    "unit_tests_passed": 5,
+    "full_comparison_json_sha256": "18d6f5b660905211ff9a59ab84a4f56606cd9b605149a0cc3a365e6b3b3efcf0",
+    "full_control_json_sha256": "2429ed4d1c0539f2d54a654ccec1ee7218405c8581120b802fee0e80d60dddc3",
+    "full_corrected_json_sha256": "7c5fd5a97ecebcdf795101dec6316888a2ecb1f58204dae4ec0d37d44ce5508f",
+    "artifact": {
+      "name": "initializer-closure-frozen-retest",
+      "id": 13681803110,
+      "contains": [
+        "control.json",
+        "corrected.json",
+        "comparison.json"
+      ],
+      "retention_days": 30
+    }
+  },
+  "evaluation": {
+    "historical_comparisons": 210,
+    "adversarial_comparisons": 3,
+    "total_attempted": 213,
+    "assessable": 157,
+    "unassessable": 56,
+    "same_behavior_observations_between_arms": true,
+    "original_predictor_missed_changes": 3,
+    "corrected_predictor_missed_changes": 0,
+    "adversarial_initializer_changes_reverified_by_corrected": true,
+    "historical_missed_changes_original": 0,
+    "historical_missed_changes_corrected": 0,
+    "original_counterfactual_savings_fraction": 0.050266,
+    "corrected_counterfactual_savings_fraction": 0.008363,
+    "savings_criterion_fraction": 0.5,
+    "criterion_passed": false
+  },
+  "per_repository": [
+    {
+      "repo": "pallets-eco/blinker",
+      "assessable": 71,
+      "unassessable": 0,
+      "old_closure_paths": 2,
+      "corrected_closure_paths": 3,
+      "original_misses": 1,
+      "corrected_misses": 0,
+      "original_savings_fraction": 0.028192,
+      "corrected_savings_fraction": 0.020231
+    },
+    {
+      "repo": "python-hyper/hpack",
+      "assessable": 50,
+      "unassessable": 21,
+      "old_closure_paths": 7,
+      "corrected_closure_paths": 8,
+      "original_misses": 1,
+      "corrected_misses": 0,
+      "original_savings_fraction": 0.118388,
+      "corrected_savings_fraction": 0.030075
+    },
+    {
+      "repo": "python-hyper/hyperframe",
+      "assessable": 36,
+      "unassessable": 35,
+      "old_closure_paths": 3,
+      "corrected_closure_paths": 4,
+      "original_misses": 1,
+      "corrected_misses": 0,
+      "original_savings_fraction": -0.084073,
+      "corrected_savings_fraction": -0.109767
+    }
+  ],
+  "qualifications": [
+    "Only known initializer-based counterexamples were repaired; no claim of completeness against runtime plugin loading, dynamic imports, global registries, environment, or altered dependencies.",
+    "Zero missed observations in this finite set does not prove universal soundness.",
+    "Only 157/213 evaluations were assessable under frozen Python 3.13 behavioral oracles. The 56 unassessable historical revisions were not counted as successes.",
+    "Savings fraction is a counterfactual comparison of observed oracle subprocess execution time plus indexing overhead, excluding repository clone/checkout, and not a production performance guarantee.",
+    "One short oracle per repository provides modest absolute work to avoid; this is not representative of expensive verification suites.",
+    "Original, external third-party repositories were not mutated; adversarial commits remained disposable runner-local commits."
+  ],
+  "conclusion": "Generated interpreter-mandated initialization edges remove all three prior false reuse decisions; greater soundness against these cases incurs a measurable verification cost and does not establish a general semantic closure."
+}

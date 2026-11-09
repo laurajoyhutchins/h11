@@ -155,7 +155,7 @@ def main():
     commits=json.loads(args.commits.read_text())
     results=[]
     for contract in manifest["contracts"]:
-        ref=commits[STAGES[contract["id"].split(".")[-1]]]
+        ref=commits["nodes"][STAGES[contract["id"].split(".")[-1]]]["sha"]
         results.append(execute(args.repo,ref,contract))
         if args.mutations:
             for mutant in contract["mutants"]:

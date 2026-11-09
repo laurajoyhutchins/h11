@@ -158,6 +158,14 @@ class ConsumerTests(unittest.TestCase):
         self.write("claim-results.json", claims)
         self.assertEqual(self.result()["decision"], "UNKNOWN")
 
+    def test_non_object_statement_returns_unknown(self) -> None:
+        (self.artifacts / "test-result.intoto.json").write_text('["not an attestation"]')
+        self.assertEqual(self.result()["decision"], "UNKNOWN")
+
+    def test_malformed_junit_returns_unknown(self) -> None:
+        self.junit.write_text("<testsuite><testcase>")
+        self.assertEqual(self.result()["decision"], "UNKNOWN")
+
     def test_legacy_evidence_without_manifest_refuses(self) -> None:
         (self.artifacts / "dependencies.json").unlink()
         self.assertEqual(self.result()["decision"], "UNKNOWN")

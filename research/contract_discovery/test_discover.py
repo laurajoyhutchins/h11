@@ -68,6 +68,17 @@ class SourceOnlyTests(unittest.TestCase):
         self.assertEqual(resolve("toy.tests", True, 1, "helpers"), "toy.tests.helpers")
         self.assertIsNone(resolve("toy.base", False, 3, "alpha"))
 
+    def test_src_layout_with_separate_top_level_tests(self) -> None:
+        self.write("src/toy/__init__.py", "from .core import Transform\n")
+        self.write("src/toy/core.py", "class Transform:\n def apply(self, x):\n  return x\n")
+        self.write("tests/__init__.py", "")
+        self.write("tests/test_core.py", "from toy.core import Transform\n")
+        result = discover(self.root, "toy", ["tests"], source_dir="src")
+        self.assertEqual(result["source_dir"], "src")
+        self.assertEqual(result["production_modules"]["toy.core"]["path"], "src/toy/core.py")
+        self.assertEqual(len(result["tests"]), 1)
+        self.assertEqual(result["tests"][0]["direct_production_imports"], ["toy.core"])
+
     def test_missing_package_fails(self) -> None:
         with self.assertRaises(ValueError):
             discover(self.root, "missing")

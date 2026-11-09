@@ -65,6 +65,38 @@ jobs:
               --expected-commit "$GITHUB_SHA" \
               --output-dir "$RUNNER_TEMP/new-evidence"
           fi
+      - name: Adversarial check in a disposable local Git clone
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone -q --shared "$GITHUB_WORKSPACE" "$RUNNER_TEMP/mutant"
+          git -C "$RUNNER_TEMP/mutant" config user.name "Research Fixture"
+          git -C "$RUNNER_TEMP/mutant" config user.email research@example.invalid
+          MUTANT_REPO="$RUNNER_TEMP/mutant" python - <<'PY'
+          import os
+          from pathlib import Path
+          p = Path(os.environ["MUTANT_REPO"]) / "h11/_readers.py"
+          s = p.read_text()
+          needle = 'self._bytes_in_chunk = int(matches["chunk_size"], base=16)'
+          assert s.count(needle) == 1
+          p.write_text(s.replace(needle, needle + " + 1"))
+          PY
+          git -C "$RUNNER_TEMP/mutant" add h11/_readers.py
+          git -C "$RUNNER_TEMP/mutant" commit -qm "fixture: corrupt chunk length"
+          mutant_sha="$(git -C "$RUNNER_TEMP/mutant" rev-parse HEAD)"
+          python research/ci_evidence/consume.py \
+            --repository "$RUNNER_TEMP/mutant" \
+            --prior-artifacts "$RUNNER_TEMP/previous" \
+            --trusted-run "$RUNNER_TEMP/run-info.json" \
+            --target-commit "$mutant_sha" \
+            --output "$RUNNER_TEMP/mutant-decision.json"
+          mutant_verdict="$(python -c 'import json,sys;print(json.load(open(sys.argv[1]))["decision"])' "$RUNNER_TEMP/mutant-decision.json")"
+          test "$mutant_verdict" = REVERIFY
+          if (cd "$RUNNER_TEMP/mutant" && python -m pytest -q h11/tests/test_io.py::test_ChunkedReader); then
+            echo "ERROR: corrupted chunk length escaped real tests"
+            exit 1
+          fi
+          echo "Mutated Git source was reverified and the actual h11 reader test rejected it."
       - name: Publish inspectable consumer decision
         if: always()
         uses: actions/upload-artifact@v4
@@ -72,6 +104,7 @@ jobs:
           name: evidence-reuse-decision
           path: |
             ${{ runner.temp }}/reuse-decision.json
+            ${{ runner.temp }}/mutant-decision.json
             ${{ runner.temp }}/new-evidence/
           if-no-files-found: warn
           retention-days: 30

@@ -1,0 +1,82 @@
+name: Verify synthetic-history checkpoints
+on:
+  push:
+    branches:
+      - research/synthetic-history-evidence
+    paths:
+      - .github/workflows/synthetic-history-verify.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify upstream tests at exact tree checkpoints
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install only upstream pytest dependency
+        run: python -m pip install pytest==9.0.2
+      - name: Test exact synthetic commits
+        shell: bash
+        run: |
+          set -uo pipefail
+          printf '## Upstream pytest on synthetic-history checkpoints\n\n' >> "$GITHUB_STEP_SUMMARY"
+          printf '| Commit | Test result | Summary |\n| --- | --- | --- |\n' >> "$GITHUB_STEP_SUMMARY"
+          failures=0
+          # Readers/writers are independently branched; both are verified.
+          while IFS='|' read -r label sha; do
+            [[ -n "$sha" ]] || continue
+            git checkout --quiet --detach "$sha" || exit 2
+            echo "::group::$label ($sha)"
+            # Avoid accidental fallback to an installed h11 when __init__.py is absent.
+            if ! PYTHONPATH="$GITHUB_WORKSPACE" python -c 'import h11, os, pathlib; p=pathlib.Path.cwd() / "h11"; loc=list(h11.__path__); assert any(pathlib.Path(v).resolve() == p.resolve() for v in loc), loc; assert not h11.__file__ or pathlib.Path(h11.__file__).resolve().is_relative_to(p.resolve()), h11.__file__'; then
+              printf '| %s | ERROR | Import resolved outside checkout |\n' "$label" >> "$GITHUB_STEP_SUMMARY"
+              failures=$((failures+1))
+              echo 'Module isolation check failed'
+              echo '::endgroup::'
+              continue
+            fi
+            set +e
+            PYTHONPATH="$GITHUB_WORKSPACE" python -m pytest -q h11/tests >/tmp/checkpoint-pytest.log 2>&1
+            status=$?
+            set -e
+            if [[ "$status" == 0 ]]; then
+              last="$(tail -n 1 /tmp/checkpoint-pytest.log)"
+              printf '| %s | PASS | %s |\n' "$label" "$last" >> "$GITHUB_STEP_SUMMARY"
+              tail -n 5 /tmp/checkpoint-pytest.log
+            else
+              failures=$((failures+1))
+              last="$(tail -n 1 /tmp/checkpoint-pytest.log)"
+              printf '| %s | FAIL (%s) | %s |\n' "$label" "$status" "$last" >> "$GITHUB_STEP_SUMMARY"
+              tail -n 55 /tmp/checkpoint-pytest.log
+            fi
+            echo "::endgroup::"
+          done <<'CHECKPOINTS'
+          foundation|02fa04eab35e8394ea51bceb8b96e6c23da7a953
+          headers|e482722939a4ad19bea96be0fe4a948751d66380
+          events|b1aa461b7d7c45bf578bc18c4c1b0da390ccca4b
+          state|7a384f41e01541ea1cdaa795d90746407bc253a1
+          receivebuffer|db1fff06d47fd43ace98c387fded033bd813d77a
+          readers|15507e1ac95264e34e7a8d600538c83676b5c1d5
+          writers-independent|0b9365e45d5b9bc21aede22f8b146edd9deda871
+          merged-codecs|63df258e204f24fce04ff31de195b59e6d27357e
+          connection|ec634e84d3efb2bb58cc5bae5887abaed2bdba79
+          distribution|7ccd0a7b4ed9243a4d1d5771127feb7ed9899177
+          docs-independent|4cd0b02c8169863a42bb54dd22dfabaf94e18f27
+          merged-documentation|701bb007a5e92b53a3e17b9c4a60a636394ec69b
+          final|0a774d3953a5ab4f63fcb31ba77be0e54d71189d
+          CHECKPOINTS
+          if [[ "$failures" -gt 0 ]]; then
+            echo "Upstream pytest did not pass at $failures checkpoint(s). See the per-checkpoint results, including expected incompleteness at earlier stages."
+            # Mark this workflow successful if the experiment completed and recorded all results.
+            # Test failures are data, not infrastructure failures.
+          fi
+          echo "Completed 13 checkpoint attempts; $failures did not pass."

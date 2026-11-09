@@ -15,6 +15,8 @@ import subprocess
 import sys
 import xml.etree.ElementTree as ET
 
+import manifest
+
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ".github/workflows/native-contract-evidence.yml"
 TEST_FILES = (
@@ -26,6 +28,7 @@ TEST_FILES = (
 CONFIG_FILES = (
     WORKFLOW,
     "research/ci_evidence/run.py",
+    "research/ci_evidence/manifest.py",
     "research/ci_evidence/test_roundtrip.py",
     "research/ci_evidence/test_exporter.py",
     "research/contract_poset/test_initializer_closure.py",
@@ -115,7 +118,8 @@ def parse_junit(path: Path) -> tuple[list[str], list[str], list[str], dict[str, 
 
 
 def make_statement(repo: Path, commit: str, tree: str, junit: Path,
-                   passed: list[str], failed: list[str], warned: list[str]) -> dict:
+                   passed: list[str], failed: list[str], warned: list[str],
+                   dependencies: Path | None = None) -> dict:
     if not passed:
         raise ValueError("no passing tests")
     server = os.environ.get("GITHUB_SERVER_URL", "https://github.com").rstrip("/")
@@ -128,6 +132,11 @@ def make_statement(repo: Path, commit: str, tree: str, junit: Path,
         "warnedTests": warned,
         "failedTests": failed,
     }
+    if dependencies is not None:
+        predicate["configuration"].append({
+            "name": "dependencies.json",
+            "digest": {"sha256": sha256(dependencies)},
+        })
     if os.environ.get("GITHUB_RUN_ID"):
         predicate["url"] = f"{server}/{repo_name}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
     return {
@@ -211,7 +220,10 @@ def run(repo: Path, output_dir: Path, expected: str | None) -> int:
         raise ValueError("pytest returned success despite JUnit failures")
     if (commit, tree) != identity(repo, expected):
         raise ValueError("source changed during verification")
-    statement = make_statement(repo, commit, tree, junit, passed, failed, warned)
+    dependency_path = output_dir / "dependencies.json"
+    write(dependency_path, manifest.generate(repo, commit))
+    statement = make_statement(repo, commit, tree, junit, passed, failed, warned,
+                               dependencies=dependency_path)
     # Do not pretend that the known limitation is a newly discovered bug.
     sarif = make_sarif(repo, passed) if not failed and not warned else {
         "$schema": "https://json.schemastore.org/sarif-2.1.0.json",

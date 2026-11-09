@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "experiment": "frozen bounded verification-target selection on third unseen repository",
+  "holdout": {
+    "repository": "pallets/jinja",
+    "commit": "5ef70112a1ff19c05324ff889dd30405b1002044",
+    "selected_before_inspection": true,
+    "source_dir": "src",
+    "package": "jinja2",
+    "tests": [
+      "tests"
+    ]
+  },
+  "development_sets": [
+    {
+      "repository": "laurajoyhutchins/h11",
+      "commit": "62c5068c971579d61fa1b55373390e12f25fd856",
+      "source_dir": ".",
+      "package": "h11",
+      "tests": [
+        "h11/tests"
+      ]
+    },
+    {
+      "repository": "pallets/itsdangerous",
+      "commit": "672971d66a2ef9f85151e53283113f33d642dabd",
+      "source_dir": "src",
+      "package": "itsdangerous",
+      "tests": [
+        "tests/test_itsdangerous"
+      ]
+    },
+    {
+      "repository": "pallets/click",
+      "commit": "8abb77a8432e03ed14a95f972b44f905279415a7",
+      "source_dir": "src",
+      "package": "click",
+      "tests": [
+        "tests"
+      ]
+    }
+  ],
+  "frozen_selection_algorithm": {
+    "input": "schema_version 2 JSON from discover_v2(), no direct source reading, no hand-authored contract ledger, no external oracle data",
+    "candidate_families": [
+      "independent_sibling_pair",
+      "test_exercised_module_closure",
+      "extension_boundary"
+    ],
+    "focus_modules": {
+      "independent_sibling_pair": [
+        "left",
+        "right"
+      ],
+      "test_exercised_module_closure": [
+        "module"
+      ],
+      "extension_boundary": [
+        "base_module",
+        "derived_module"
+      ]
+    },
+    "test_count": "Unique original test modules whose direct_production_imports intersect focus_modules. Imports count as evidence of exposure, not tested semantics.",
+    "downstream_count": "Production modules outside focus whose runtime_closure contains at least one focus module.",
+    "module_loc": "Sum of production_modules[module].loc over distinct focus modules.",
+    "closure_size": "Cardinality of union of their runtime_closure sets.",
+    "static_base_score": "3*min(test_count,4) + 2*min(downstream_count,4) + min(4,ceil(module_loc/120)) + family_bonus - min(3,max(0,closure_size-4)//4) - (4 if any module in closure has dynamic imports else 0)",
+    "family_bonus": {
+      "independent_sibling_pair": 4,
+      "test_exercised_module_closure": 2,
+      "extension_boundary_cross_module": 3,
+      "extension_boundary_intra_module": 1
+    },
+    "greedy_score": "static_base_score + 2*min(3,number_of_focus_modules_not_yet_covered) + (2 if family_not_yet_selected else 0)",
+    "selection": "Repeat up to 3 times: choose highest greedy_score, then ascending canonical candidate id; remove selected candidate and all candidates with exactly the same focus-module set; update covered modules and selected families. Do not filter out zero-test candidates but label test evidence separately.",
+    "max_selected": 3,
+    "status_for_all": "INSUFFICIENT_EVIDENCE",
+    "no_generated_oracles": true,
+    "safety": "No target Python code execution; standard-library AST only; no mutation or artifact creation in target repo.",
+    "source_integrity": "Source blob SHA must be recorded by discover, Git tree pinned independently, checkout clean after execution.",
+    "unspecified_behavior": "Candidate scores approximate leverage and test exposure, not correctness, contract completeness or real risk. Return unsupported/unknown rather than guess."
+  },
+  "evaluation": {
+    "run_existing_generic_unit_tests": true,
+    "run_on_holdout_without_reordering": true,
+    "record_all_candidates_and_top3": true,
+    "verify_without_oracles_returns_insufficient_evidence": true,
+    "compare_frozen_selector_across_development_sets": true,
+    "evaluate_stability": "run selection twice on same discovery JSON; require byte identical",
+    "acceptance": "No invented semantic contracts or verified claims; preserve original pinned source repos; independent holdout is not used to tune scoring; no need for nonzero selected count if absent",
+    "limit": "No empirical developer productivity evidence; no semantic oracles on holdout unless independently supplied in a later experiment."
+  }
+}

@@ -272,14 +272,8 @@ def attach_contracts(contracts: dict, links: dict, verified: dict,
     closure = validate_graph(graph)
     for claim, reqs in graph.items():
         intro = by_stage[definitions[claim]["introduced_at_stage"]]
-        available = set()
-        # Structural Git ancestry establishes only presence of prior stage claims.
-        def collect(current: str) -> None:
-            if current in available:
-                return
-            available.add(current)
-            for parent in by_stage[current]["stage_parent_names"]:
-                collect(parent)
+        # Stage ancestry determines whether a declared prerequisite is present,
+        # but cannot establish its semantic implication.
         ancestor_stages: set[str] = set()
         def trace(stage_name: str) -> None:
             if stage_name in ancestor_stages:

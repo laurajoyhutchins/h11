@@ -104,7 +104,7 @@ class FormalBridgeTests(unittest.TestCase):
                 "Lean (version 4.35.0, x86_64-unknown-linux-gnu)", bad)
 
     def test_missing_theorem_or_wrong_version_is_rejected(self) -> None:
-        with self.assertRaisesRegex(ValueError, "all three theorem"):
+        with self.assertRaisesRegex(ValueError, "all four theorem"):
             bridge.validate_proof_output(
                 "Lean (version 4.35.0, x86_64-unknown-linux-gnu)",
                 GOOD_OUTPUT.splitlines()[0])

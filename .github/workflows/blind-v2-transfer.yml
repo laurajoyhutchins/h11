@@ -9,6 +9,7 @@ on:
       - research/contract_discovery/discover_v2.py
       - research/contract_discovery/test_discover_v2.py
       - research/contract_verify/verify.py
+      - research/contract_verify/test_verify.py
   workflow_dispatch:
 
 permissions:

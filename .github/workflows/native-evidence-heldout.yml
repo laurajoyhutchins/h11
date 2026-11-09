@@ -5,6 +5,7 @@ on:
     branches: [research/native-contract-ci-evidence]
     paths:
       - research/ci_evidence/heldout.py
+      - research/ci_evidence/test_heldout.py
       - .github/workflows/native-evidence-heldout.yml
   workflow_dispatch:
 
@@ -22,6 +23,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+      - name: Test held-out comparator decisions
+        run: PYTHONPATH=research/ci_evidence python -m unittest -v test_heldout
       - name: Execute held-out historical oracles and adversarial Git changes
         shell: bash
         run: |

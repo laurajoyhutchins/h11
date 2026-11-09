@@ -21,6 +21,7 @@ REQUIRED_THEOREMS = (
     "HexPreservation.bitwiseDigits_eq_toDigits",
     "HexPreservation.chunkTrace_eq_for_all_payloads",
     "HexPreservation.messageTrace_eq_for_all_inputs",
+    "HexPreservation.sharedReaderCongruence",
 )
 ALLOWED_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
 
@@ -94,7 +95,7 @@ def validate_proof_output(version: str, stdout: str) -> None:
     # Lean #print axioms enumerates all transitive assumptions for each theorem.
     rows = re.findall(r"'([^']+)' depends on axioms: \[([^\]]*)\]", stdout)
     if len(rows) != len(REQUIRED_THEOREMS) or set(t for t, _ in rows) != set(REQUIRED_THEOREMS):
-        raise ValueError("Lean failed to disclose all three theorem axiom sets")
+        raise ValueError("Lean failed to disclose all four theorem axiom sets")
     for theorem, raw in rows:
         axioms = {part.strip() for part in raw.split(",") if part.strip()}
         if not axioms.issubset(ALLOWED_AXIOMS):

@@ -145,7 +145,8 @@ def make_statement(repo: Path, commit: str, tree: str, junit: Path,
 def make_sarif(repo: Path, passed: list[str]) -> dict:
     source = "research/contract_poset/falsification.py"
     lines = (repo / source).read_text().splitlines()
-    positions = [i for i, text in enumerate(lines, 1)\n                 if RESULT_MARKER in text and "-> list[str]" in text]
+    positions = [i for i, text in enumerate(lines, 1)
+                 if RESULT_MARKER in text and "-> list[str]" in text]
     if len(positions) != 1:
         raise ValueError("known control limitation no longer matches source")
     if not any("test_root_initializer_is_an_implicit_import_dependency" in name

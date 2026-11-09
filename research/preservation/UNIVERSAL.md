@@ -69,6 +69,15 @@ PreservedComposition(x)
 
 The writer-trace theorem is universal. The previous reader correctness
 claim is *not*: it is still limited to its finite tested conditions.
+
+The earlier evidence producer deliberately tracked the **whole h11 package**,
+including the original writer. Changing the writer therefore invalidates
+that coarse manifest for the candidate. The reader claim is established at
+the original baseline, but transporting it to the candidate additionally
+requires an explicit **noninterference/frame assumption**: no reader test
+reflects on the new writer method body, and import-time behavior does not
+depend on its contents. The certificate does not pretend the old manifest
+proves that independence.
 The old standalone writer test may also include behaviors outside the
 model's byte-payload/nonthrowing-callback domain and must not be relabeled
 universally verified.

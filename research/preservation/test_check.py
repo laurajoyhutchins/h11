@@ -37,7 +37,7 @@ class PreservationTests(unittest.TestCase):
         return verifier.verify_rows(self.baseline, self.candidate, [self.case])
 
     def test_corpus_is_finite_deterministic_and_nonempty(self) -> None:
-        self.assertEqual(len(self.cases), 108)
+        self.assertEqual(len(self.cases), 112)
         self.assertEqual(corpus(), self.cases)
         self.assertIn("trace-000", [x["id"] for x in self.cases])
 

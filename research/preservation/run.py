@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -109,6 +110,38 @@ def main() -> None:
             "--certificate", str(work / "preservation.json"),
             "--output", str(work / "prior-reference.json"),
             cwd=original, env=attest_env)
+        # Negative controls: untrusted predecessor evidence must not be transported.
+        forged_prior = work / "forged-prior"
+        shutil.copytree(args.prior_artifacts.resolve(), forged_prior)
+        old_statement = forged_prior / "test-result.intoto.json"
+        changed_statement = json.loads(old_statement.read_text())
+        changed_statement["predicate"]["result"] = "FAILED"
+        old_statement.write_text(json.dumps(changed_statement) + "\n")
+        prior_tool = str(original / "research/preservation/prior.py")
+        forged_ref = work / "forged-prior-reference.json"
+        run(sys.executable, prior_tool,
+            "--source", str(original),
+            "--prior", str(forged_prior),
+            "--trusted-run", str(args.trusted_run.resolve()),
+            "--certificate", str(work / "preservation.json"),
+            "--output", str(forged_ref),
+            cwd=original, env=attest_env, expect_failure=True)
+        if forged_ref.exists():
+            raise AssertionError("forged prior evidence was accepted")
+        modified_run = json.loads(args.trusted_run.read_text())
+        modified_run["conclusion"] = "failure"
+        failed_run_path = work / "failed-run.json"
+        failed_run_path.write_text(json.dumps(modified_run) + "\n")
+        failed_ref = work / "failed-run-reference.json"
+        run(sys.executable, prior_tool,
+            "--source", str(original),
+            "--prior", str(args.prior_artifacts.resolve()),
+            "--trusted-run", str(failed_run_path),
+            "--certificate", str(work / "preservation.json"),
+            "--output", str(failed_ref),
+            cwd=original, env=attest_env, expect_failure=True)
+        if failed_ref.exists():
+            raise AssertionError("failed prior run was accepted")
     evidence_command = [
         sys.executable, str(original / "research/preservation/attest.py"),
         "--work", str(work),
@@ -156,6 +189,8 @@ def main() -> None:
         "altered_in_toto_status_refused": True,
         "in_toto_statement_verified": True,
         "prior_in_toto_evidence_linked": args.prior_artifacts is not None,
+        "forged_prior_refused": args.prior_artifacts is not None,
+        "failed_prior_run_refused": args.prior_artifacts is not None,
     }, indent=2, sort_keys=True))
 
 

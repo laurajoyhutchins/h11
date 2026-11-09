@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "experiment": "ledger-free-python-contract-discovery",
+  "source_repo": "laurajoyhutchins/h11",
+  "source_commit": "62c5068c971579d61fa1b55373390e12f25fd856",
+  "source_tree": "5a1cacdb9d0d6e8d18e8161924ae18130da6c130",
+  "discoverer_commit": "f80180299828c13b67cb56bc397c257095bd3627",
+  "verification_run": "https://github.com/laurajoyhutchins/h11/actions/runs/42555291160",
+  "runner": "ubuntu-24.04",
+  "python": "3.13",
+  "no_prior_contract_ledger_used": true,
+  "result": {
+    "status": "PASS",
+    "production_modules": 11,
+    "discovered_test_files": 9,
+    "candidate_independent_sibling_pairs": 1,
+    "strongest_pair": {
+      "join": "h11._connection",
+      "left": "h11._readers",
+      "right": "h11._writers",
+      "matched_class_families": [
+        "Chunked",
+        "ContentLength",
+        "Http10"
+      ]
+    },
+    "extra_test_dependency": {
+      "test_file": "h11/tests/test_headers.py",
+      "production_target": "h11._headers",
+      "additional_module": "h11._events"
+    },
+    "source_only_test_cases_passed": 5,
+    "discovered_json_sha256": "8dff3d01c4ff684e509a420d1f5a08ebc227475a9adbfb97ad29033ac613c499"
+  },
+  "caveats": [
+    "The output records candidate architectural relationships, not independently verified behavioral contracts.",
+    "Static import analysis does not prove source slices are separately executable.",
+    "There is no measurement of improved developer or agent comprehension.",
+    "The acceptance test knows expected h11 module names, but those names are not inputs to the discovery algorithm.",
+    "A separately designed unrelated toy package exercises the generic inference mechanics."
+  ]
+}

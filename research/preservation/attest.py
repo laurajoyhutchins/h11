@@ -30,6 +30,7 @@ VERIFIER_FILES = (
     "research/preservation/check.py",
     "research/preservation/attest.py",
     "research/preservation/run.py",
+    "research/preservation/prior.py",
     "research/preservation/test_check.py",
     "research/preservation/test_attest.py",
     ".github/workflows/contract-preservation.yml",
@@ -84,6 +85,17 @@ def statement_for(work: Path, baseline: Path, candidate: Path,
         *[resource(name, git(baseline, "show", f"{original}:{name}"))
           for name in VERIFIER_FILES],
     ]
+    prior_link = work / "prior-reference.json"
+    if prior_link.is_file():
+        linked = strict_json(prior_link)
+        if (linked.get("schema_version") != 1 or
+            linked.get("kind") != "linked-prior-evidence" or
+            linked.get("decision") != "PRESERVE_WITHIN_DECLARED_TEST_SCOPE" or
+            linked.get("refinement_baseline_commit") != original or
+            linked.get("candidate_commit") != modified or
+            len(linked.get("claim_lineage", [])) != 3):
+            raise ValueError("prior evidence reference is not consistent with candidate")
+        configuration.append(resource("prior-reference.json", prior_link.read_bytes()))
     executed = [
         "source-diff-restricted-to-ChunkedWriter.send_data",
         "reader-and-package-initializers-source-unchanged",

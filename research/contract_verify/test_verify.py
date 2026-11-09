@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 from discover import discover
+from discover_v2 import discover_v2
 from verify import candidate_key, verify
 
 
@@ -98,6 +99,37 @@ class VerificationEngineTests(unittest.TestCase):
         result = self.check(self.plan, discover(self.root, "toy"))
         self.assertEqual(result["status"], "UNSUPPORTED")
         self.assertEqual(result["cases"][0]["status"], "UNSUPPORTED")
+
+    def test_v2_test_closure_and_inheritance_boundaries(self) -> None:
+        source = self.pkg / "a.py"
+        source.write_text("from .base import Payload\nclass PacketReader(Payload):\n def go(self,x):\n  return x+1\n")
+        helper = self.pkg / "tests"
+        helper.mkdir()
+        (helper / "__init__.py").write_text("")
+        (helper / "test_a.py").write_text("from ..a import PacketReader\n")
+        discovery = discover_v2(self.root, "toy", ["toy/tests"])
+        candidates = {c["id"] for c in discovery["test_exercised_module_candidates"]}
+        self.assertIn("test-module|toy.a", candidates)
+        extensions = {c["id"] for c in discovery["extension_boundary_candidates"]}
+        self.assertIn("extension|toy.base.Payload|toy.a.PacketReader", extensions)
+        cases = []
+        for key in ("test-module|toy.a", "extension|toy.base.Payload|toy.a.PacketReader"):
+            cases.append({
+                "id": key, "candidate": key, "modules": ["toy.a"],
+                "oracle": "reader_oracle.py", "claims": ["Reader increments supplied input"],
+                "mutations": [{
+                    "id": "plus-two", "module": "toy.a",
+                    "search": "return x+1", "replace": "return x+2",
+                }],
+            })
+        report = verify(self.root, discovery, {"schema_version": 1, "cases": cases},
+                        self.oracles, timeout=10)
+        keyed = {candidate["candidate"]: candidate for candidate in report["candidates"]}
+        self.assertEqual(keyed["test-module|toy.a"]["status"], "VERIFIED_WITHIN_SCOPE")
+        self.assertEqual(keyed["extension|toy.base.Payload|toy.a.PacketReader"]["status"],
+                         "VERIFIED_WITHIN_SCOPE")
+        empty = verify(self.root, discovery, None, self.oracles, timeout=10)
+        self.assertTrue(all(c["status"] == "INSUFFICIENT_EVIDENCE" for c in empty["candidates"]))
 
     def test_testless_oracle_is_blocked(self) -> None:
         (self.oracles / "reader_oracle.py").write_text("# no tests\n")

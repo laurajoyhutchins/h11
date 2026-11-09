@@ -1,0 +1,143 @@
+name: Sealed reader frame and universal writer preservation
+
+on:
+  push:
+    branches: [research/reader-frame]
+    paths:
+      - .github/workflows/universal-contract-preservation.yml
+      - research/preservation/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  prove-and-transport:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PRIOR_RUN: "42667731213"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install exact Lean 4.35.0 using standard Lean action
+        uses: leanprover/lean-action@v1
+        with:
+          lake-package-directory: research/preservation/formal
+          auto-config: false
+          build: false
+          test: false
+          use-github-cache: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install same test environment as prior provenance
+        run: python -m pip install 'pytest==9.2.0'
+
+      - name: Check universal Lean theorem in actual Lean compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd research/preservation/formal
+          lean --version
+          lean HexPreservation.lean
+
+      - name: Test exact Python source bridge and evidence refusals
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH=research/preservation python -m unittest \
+            discover -s research/preservation -p 'test_*.py' -v
+
+      - name: Fetch and authenticate earlier GitHub test results
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/previous"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$PRIOR_RUN" > "$RUNNER_TEMP/trusted-run.json"
+          gh run download "$PRIOR_RUN" --repo "$GITHUB_REPOSITORY" \
+            --name native-contract-evidence --dir "$RUNNER_TEMP/previous"
+
+      - name: Produce disposable real source refactor and prior claim lineage
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/preservation"
+          python research/preservation/run.py \
+            --source . --work "$RUNNER_TEMP/preservation" \
+            --prior-artifacts "$RUNNER_TEMP/previous" \
+            --trusted-run "$RUNNER_TEMP/trusted-run.json"
+
+      - name: Check reader-only source closure and replay original inputs without writer imports
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="$RUNNER_TEMP/preservation/baseline"
+          python research/preservation/sealed_reader.py \
+            --baseline "$RUNNER_TEMP/preservation/baseline" \
+            --baseline-observations "$RUNNER_TEMP/preservation/baseline-observations.json" \
+            --prior-reference "$RUNNER_TEMP/preservation/prior-reference.json" \
+            --output "$RUNNER_TEMP/preservation/sealed-reader-observations.json"
+          python research/preservation/reader_frame.py \
+            --baseline "$RUNNER_TEMP/preservation/baseline" \
+            --candidate "$RUNNER_TEMP/preservation/candidate" \
+            --observations "$RUNNER_TEMP/preservation/sealed-reader-observations.json" \
+            --baseline-observations "$RUNNER_TEMP/preservation/baseline-observations.json" \
+            --prior "$RUNNER_TEMP/preservation/prior-reference.json" \
+            --output "$RUNNER_TEMP/preservation/reader-frame.json"
+
+      - name: Verify universal theorem and source bridge against actual Git objects
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="$RUNNER_TEMP/preservation/baseline"
+          args=(
+            --root "$RUNNER_TEMP/preservation/baseline"
+            --baseline "$RUNNER_TEMP/preservation/baseline"
+            --candidate "$RUNNER_TEMP/preservation/candidate"
+            --work "$RUNNER_TEMP/preservation"
+            --prior-artifacts "$RUNNER_TEMP/previous"
+            --trusted-run "$RUNNER_TEMP/trusted-run.json"
+          )
+          python research/preservation/universal.py emit "${args[@]}"
+          python research/preservation/universal.py verify "${args[@]}"
+          cp "$RUNNER_TEMP/preservation/universal-preservation.intoto.json" \
+            "$RUNNER_TEMP/preservation/universal-original.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p = Path(os.environ["RUNNER_TEMP"]) / "preservation/universal-preservation.intoto.json"
+          d = json.loads(p.read_text())
+          d["predicate"]["result"] = "FAILED"
+          p.write_text(json.dumps(d))
+          PY
+          if python research/preservation/universal.py verify "${args[@]}"; then
+            echo "Tampered universal in-toto incorrectly accepted"
+            exit 1
+          fi
+          mv "$RUNNER_TEMP/preservation/universal-original.json" \
+            "$RUNNER_TEMP/preservation/universal-preservation.intoto.json"
+          python research/preservation/universal.py verify "${args[@]}"
+
+      - name: Publish proof, source bridge, and linked in-toto claims
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sealed-reader-frame-evidence
+          path: |
+            ${{ runner.temp }}/preservation/preservation.json
+            ${{ runner.temp }}/preservation/preservation.intoto.json
+            ${{ runner.temp }}/preservation/prior-reference.json
+            ${{ runner.temp }}/preservation/candidate.patch
+            ${{ runner.temp }}/preservation/universal-preservation.json
+            ${{ runner.temp }}/preservation/reader-frame.json
+            ${{ runner.temp }}/preservation/sealed-reader-observations.json
+            ${{ runner.temp }}/preservation/universal-preservation.intoto.json
+          if-no-files-found: warn
+          retention-days: 30

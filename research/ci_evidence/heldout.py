@@ -128,8 +128,8 @@ def evaluate(target: dict, root: Path, count: int) -> dict[str, Any]:
     if expected is None:
         raise ValueError(f"pinned baseline oracle invalid: {err}")
     history = git(repo, "rev-list", "--first-parent", "-n",
-                  str(START_AFTER + count + 1), head).splitlines()
-    if len(history) < START_AFTER + count + 1:
+                  str(START_AFTER + count + 2), head).splitlines()
+    if len(history) < START_AFTER + count + 2:
         raise ValueError("held-out first-parent history too short")
     selected = history[START_AFTER + 1:START_AFTER + count + 1]
     baseline_git = git(repo, "rev-parse", head + "^{tree}")
@@ -174,13 +174,77 @@ def evaluate(target: dict, root: Path, count: int) -> dict[str, Any]:
                 candidate["repeatability_failure"] = True
         rows.append(candidate)
     selective_elapsed = time.perf_counter() - selective_started
+
+    # A second, actually incremental cohort uses adjacent source revisions:
+    # historical-(n+1) is the prior verified state, historical-n the target.
+    # The source selector runs without seeing the target oracle result.
+    adjacent_baselines: list[dict[str, Any]] = []
+    for index, target_revision in enumerate(selected, 1):
+        old_revision = history[START_AFTER + index + 1]
+        git(repo, "checkout", "-q", "--detach", "-f", old_revision)
+        old_observation, seconds, old_error = oracle(repo, pkg)
+        adjacent_baselines.append({
+            "older_commit": old_revision, "newer_commit": target_revision,
+            "older_observation": old_observation,
+            "older_oracle_error": old_error,
+            "prior_evidence_seconds": round(seconds, 6),
+        })
+    adjacent_started = time.perf_counter()
+    adjacent_rows: list[dict[str, Any]] = []
+    for pair in adjacent_baselines:
+        old = pair["older_commit"]
+        newer = pair["newer_commit"]
+        prior_ok = pair["older_observation"] is not None
+        if not prior_ok:
+            choice, changed = "UNKNOWN", ["PRIOR_ORACLE_UNASSESSABLE"]
+        else:
+            choice, changed = choose(source_snapshot(repo, old, prefix),
+                                     source_snapshot(repo, newer, prefix), prefix)
+        newer_observed, newer_error = observed_by_revision[newer]
+        observed_difference = (pair["older_observation"] != newer_observed
+                               if prior_ok and newer_observed is not None else None)
+        record: dict[str, Any] = {
+            "prior": old, "candidate": newer, "decision": choice,
+            "changed_paths": changed, "assessable_pair":
+                prior_ok and newer_observed is not None,
+            "behavior_changed": observed_difference,
+            "missed_change": choice == "REUSE" and observed_difference is True,
+            "oracle_error": newer_error, "prior_oracle_error": pair["older_oracle_error"],
+        }
+        if choice != "REUSE":
+            git(repo, "checkout", "-q", "--detach", "-f", newer)
+            repeated, secs, repeated_error = oracle(repo, pkg)
+            record["selective_oracle_seconds"] = round(secs, 6)
+            record["repeatability_failure"] = (
+                repeated != newer_observed or repeated_error != newer_error)
+        adjacent_rows.append(record)
+    adjacent_wall = time.perf_counter() - adjacent_started
+    adjacent_metrics = {
+        "reuse": sum(x["decision"] == "REUSE" for x in adjacent_rows),
+        "reverify": sum(x["decision"] == "REVERIFY" for x in adjacent_rows),
+        "unknown": sum(x["decision"] == "UNKNOWN" for x in adjacent_rows),
+        "assessable_pairs": sum(x["assessable_pair"] for x in adjacent_rows),
+        "misses": sum(x["missed_change"] for x in adjacent_rows),
+        "control_target_wall_seconds": round(control_elapsed, 6),
+        "selective_target_wall_seconds": round(adjacent_wall, 6),
+        "observed_wall_savings_fraction": (
+            round(1 - adjacent_wall / control_elapsed, 6)
+            if control_elapsed else None),
+        "prior_evidence_oracle_seconds": round(
+            sum(x["prior_evidence_seconds"] for x in adjacent_baselines), 6),
+    }
+    print("ADJACENT", target["repository"], json.dumps(adjacent_metrics, sort_keys=True),
+          flush=True)
+
     adversaries = local_adversaries(repo, target, head, baseline, expected, prefix)
     return {
         "repository": target["repository"], "source_commit": head,
         "source_tree": baseline_git, "baseline_oracle_seconds": round(baseline_cost, 6),
         "heldout_after_prior_70": count,
         "source_tracking": "all tracked paths under src/package plus known root config",
-        "history": rows, "adversarial": adversaries,
+        "history": rows, "adjacent": {"rows": adjacent_rows,
+                                       "metrics": adjacent_metrics},
+        "adversarial": adversaries,
         "metrics": {
             "control_wall_seconds": round(control_elapsed, 6),
             "selective_wall_seconds": round(selective_elapsed, 6),
@@ -218,8 +282,10 @@ def main() -> None:
         results.append(record)
     total_control = sum(r["metrics"]["control_wall_seconds"] for r in results)
     total_selective = sum(r["metrics"]["selective_wall_seconds"] for r in results)
+    adjacent_control = sum(r["adjacent"]["metrics"]["control_target_wall_seconds"] for r in results)
+    adjacent_selected = sum(r["adjacent"]["metrics"]["selective_target_wall_seconds"] for r in results)
     report = {
-        "schema_version": 1, "test_type": "post-hoc held-out observational challenge",
+        "schema_version": 2, "test_type": "post-hoc held-out observational challenge",
         "past_historical_experiment_revision_count": START_AFTER,
         "new_historical_revisions_per_repository": args.history_count,
         "source_selection": "whole tracked source subtree, not prior AST import-only closure",
@@ -235,6 +301,19 @@ def main() -> None:
             "wall_savings_fraction": round(1 - total_selective / total_control, 6)
                                      if total_control else None,
         },
+        "adjacent_totals": {
+            "comparisons": 3 * args.history_count,
+            "reuse": sum(r["adjacent"]["metrics"]["reuse"] for r in results),
+            "reverify": sum(r["adjacent"]["metrics"]["reverify"] for r in results),
+            "unknown": sum(r["adjacent"]["metrics"]["unknown"] for r in results),
+            "assessable_pairs": sum(r["adjacent"]["metrics"]["assessable_pairs"] for r in results),
+            "misses": sum(r["adjacent"]["metrics"]["misses"] for r in results),
+            "control_target_wall_seconds": round(adjacent_control, 6),
+            "selective_target_wall_seconds": round(adjacent_selected, 6),
+            "observed_wall_savings_fraction": (
+                round(1 - adjacent_selected / adjacent_control, 6)
+                if adjacent_control else None),
+        },
         "limitations": [
             "Not the in-toto consumer: only the identical whole-source Git comparison is exercised.",
             "This protocol uses pinned probes, not complete package behavior.",
@@ -247,7 +326,8 @@ def main() -> None:
     }
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     print("TOTAL", json.dumps(report["totals"], sort_keys=True), flush=True)
-    if report["totals"]["missed_observable_changes"]:
+    print("ADJACENT_TOTAL", json.dumps(report["adjacent_totals"], sort_keys=True), flush=True)
+    if report["totals"]["missed_observable_changes"] or report["adjacent_totals"]["misses"]:
         raise SystemExit("FALSIFIED: observed behavior changed despite selector reuse")
 
 

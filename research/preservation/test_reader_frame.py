@@ -27,8 +27,11 @@ class ReaderFrameTests(unittest.TestCase):
             "writer_module_imported": False,
             "candidate_reader_executions": 0,
             "observations_count": 24,
-            "cases": [{"status": "PASSED", "input": "legacy-single", "segment": 1}
-                      for _ in range(24)],
+            "cases": [
+                {"status": "PASSED", "input": name, "segment": step}
+                for name in ("legacy-empty", "legacy-single", "legacy-trailers", "legacy-binary")
+                for step in (1, 2, 3, 7, 64, 1024)
+            ],
         }
 
     def test_known_reader_imports_are_admitted(self):
@@ -96,6 +99,12 @@ class ReaderFrameTests(unittest.TestCase):
             verify_observations(self.frame, bad, self.prior)
         bad["cases"][0]["status"] = "PASSED"
         bad["cases"].pop()
+        with self.assertRaises(ValueError):
+            verify_observations(self.frame, bad, self.prior)
+
+    def test_duplicate_case_is_rejected_even_if_all_24_passed(self):
+        bad = copy.deepcopy(self.observed)
+        bad["cases"][0] = bad["cases"][1]
         with self.assertRaises(ValueError):
             verify_observations(self.frame, bad, self.prior)
 

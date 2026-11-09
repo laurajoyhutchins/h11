@@ -31,16 +31,23 @@ jobs:
           printf '## Upstream pytest on synthetic-history checkpoints\n\n' >> "$GITHUB_STEP_SUMMARY"
           printf '| Commit | Test result | Summary |\n| --- | --- | --- |\n' >> "$GITHUB_STEP_SUMMARY"
           failures=0
+          printf '\nEarlier checkpoints lack h11/__init__.py. A temporary empty import shim is used only during pytest and removed afterward; no source is committed.\n\n' >> "$GITHUB_STEP_SUMMARY"
           # Readers/writers are independently branched; both are verified.
           while IFS='|' read -r label sha; do
             [[ -n "$sha" ]] || continue
             git checkout --quiet --detach "$sha" || exit 2
             echo "::group::$label ($sha)"
+            shim=0
+            if [[ ! -f h11/__init__.py ]]; then
+              printf '# Temporary pytest package-import shim; not part of the Git commit.\n' > h11/__init__.py
+              shim=1
+            fi
             # Avoid accidental fallback to an installed h11 when __init__.py is absent.
             if ! PYTHONPATH="$GITHUB_WORKSPACE" python -c 'import h11, os, pathlib; p=pathlib.Path.cwd() / "h11"; loc=list(h11.__path__); assert any(pathlib.Path(v).resolve() == p.resolve() for v in loc), loc; assert not h11.__file__ or pathlib.Path(h11.__file__).resolve().is_relative_to(p.resolve()), h11.__file__'; then
               printf '| %s | ERROR | Import resolved outside checkout |\n' "$label" >> "$GITHUB_STEP_SUMMARY"
               failures=$((failures+1))
               echo 'Module isolation check failed'
+              if [[ "$shim" == 1 ]]; then rm h11/__init__.py; fi
               echo '::endgroup::'
               continue
             fi
@@ -58,6 +65,7 @@ jobs:
               printf '| %s | FAIL (%s) | %s |\n' "$label" "$status" "$last" >> "$GITHUB_STEP_SUMMARY"
               tail -n 55 /tmp/checkpoint-pytest.log
             fi
+            if [[ "$shim" == 1 ]]; then rm h11/__init__.py; fi
             echo "::endgroup::"
           done <<'CHECKPOINTS'
           foundation|02fa04eab35e8394ea51bceb8b96e6c23da7a953

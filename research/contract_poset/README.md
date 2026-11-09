@@ -134,6 +134,41 @@ The original source revision, existing source-identical synthetic-final revision
 
 **Interpretation limit:** `REUSE_ELIGIBLE` does not mean fresh verification was executed or that a changed whole program or merge is safe. The earlier independent evidence was established in isolated oracle contexts using temporary package shims. A changed initializer, an added integration path, external dependencies, or a different execution environment may still affect behavior. The index consumes a prior verification summary and does not independently authenticate that remote workflow on every read.
 
+## Frozen falsification retest: generated package initialization edges
+
+The original 213-comparison protocol was committed before its first results and has not been modified. After its import-only predictor missed three package-initializer mutations, the evaluation driver gained a **separate opt-in mode**: `--include-package-initializers`. The original default remains the frozen control.
+
+Under the corrected mode, each imported Python module also depends on existing parent package `__init__.py` modules. The generator recursively includes imports appearing inside those initializer modules. Nested package parents are included; no dependency list is hand-written.
+
+Run the original and corrected predictors on the same pinned protocol:
+
+```bash
+python research/contract_poset/falsification.py \
+  --protocol research/contract_poset/falsification_preregistration.json \
+  --checkout-root /tmp/import-control \
+  --output /tmp/import-control.json
+python research/contract_poset/falsification.py \
+  --protocol research/contract_poset/falsification_preregistration.json \
+  --checkout-root /tmp/init-corrected \
+  --include-package-initializers \
+  --output /tmp/init-corrected.json
+```
+
+The [passing side-by-side CI replay](https://github.com/laurajoyhutchins/h11/actions/runs/42633777477) compared all 210 historical and three previously constructed adversarial revisions with the same independent behavioral oracle on each revision. The corrected closure added exactly one package initializer per repository.
+
+| Metric | Frozen control | Generated initializer closure |
+| --- | ---: | ---: |
+| Attempted comparisons | 213 | 213 |
+| Assessable | 157 | 157 |
+| Missed observable changes | **3** | **0** |
+| Estimated oracle execution time saved | 5.0% | 0.8% |
+
+Every original miss was an explicit `__init__.py` mutation. The corrected predictor now chooses `REVERIFY` for all three. Five unit tests additionally cover root and nested initializers, imports made by initializers, missing optional namespace initializers, and cyclic imports.
+
+This is a bounded correction, not a proof that Python's complete behavioral dependencies have been recovered. The 56 unassessable historical revisions remain unassessable. The corrected predictor still cannot prove semantic closure for dynamic imports, runtime state, configuration or external environment. The observed efficiency remains far short of the originally proposed 50% target.
+
+Evidence: [machine-readable retest summary](initializer_retest_observed.json), [frozen protocol](falsification_preregistration.json), [unit tests](test_initializer_closure.py). The full control, corrected and comparison JSON files are retained as a GitHub Actions artifact on the passing run, with SHA-256 hashes in the summary.
+
 ## Where this points
 
 The source import poset may be a useful **index** into the already-existing Git Merkle DAG. A separate attestation ledger can attach bounded semantic contract evidence and dependency links without introducing a second storage system or inventing a unique chronology.

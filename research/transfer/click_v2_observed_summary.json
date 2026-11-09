@@ -9,7 +9,7 @@
     "click": "8abb77a8432e03ed14a95f972b44f905279415a7"
   },
   "workflow": {
-    "url": "https://github.com/laurajoyhutchins/h11/actions/runs/42559614934",
+    "url": "https://github.com/laurajoyhutchins/h11/actions/runs/42559921673",
     "conclusion": "success",
     "runner": "ubuntu-24.04",
     "python": "3.13"
@@ -60,8 +60,8 @@
   "unit_tests": {
     "v2_structural": 7,
     "v1_structural": 6,
-    "verifier": 9,
-    "total": 22,
+    "verifier": 10,
+    "total": 23,
     "all_passed": true
   },
   "followup_verifier_regression": {

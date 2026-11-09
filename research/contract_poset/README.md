@@ -70,19 +70,36 @@ python research/contract_poset/poset.py /path/to/evidence-branch-checkout \
   --contracts research/contract_history/contracts.json \
   --links research/contract_poset/h11_claim_links.json \
   --verified research/contract_verify/h11_verified_summary.json \
+  --ref 62c5068c971579d61fa1b55373390e12f25fd856 \
+  --ref e8d9391373d3ae3234abe4fe24d2ad0bc8116a81 \
+  --ref HEAD \
   --output /tmp/h11-poset.json
 ```
 
+### Existing Git refs, without history reconstruction
+
+The same tool projects arbitrary **existing** commit refs onto the pinned source-module basis. It allows unrelated additional files but marks changed module blobs `INCOMPATIBLE_SOURCE_VERSION`, rather than silently treating another implementation as the original.
+
+The expanded experiment used three existing Git revisions:
+
+| Git revision | Tree object | Paths added beyond original | Module state |
+| --- | --- | ---: | --- |
+| Original upstream commit `62c5068` | `5a1cacd` | 0 | All 11 modules |
+| Existing generated-history final `e8d9391` | `5a1cacd` | 0 | All 11 modules |
+| Research evidence commit `c7b3b2c` | `c17c8a1` | 59 | All 11 modules |
+
+All three mapped to the **same source-module ideal ID**. The first two commits are different but have the same Git tree. The research revision has a different Git tree containing additional evidence, but exactly the same production module blobs. This is a direct projection of already-existing Git objects: no synthetic history needs to be created.
+
 The source commit and all synthetic stage Git objects must be reachable in the supplied repository. The workflow checks these through the repository's full Git checkout, and uses a separate worktree to generate discovery JSON from the pinned source revision.
 
-The Git object projection has no non-standard Python dependencies. It is verified by nine local structural/lattice tests and a pinned Git integration run.
+The Git object projection has no non-standard Python dependencies. It is verified by ten local structural/lattice tests and a pinned Git integration run.
 
 - [Implementation](poset.py)
 - [Unit tests](test_poset.py)
 - [Pinned observations](h11_observed.json)
-- [Passing GitHub Actions run](https://github.com/laurajoyhutchins/h11/actions/runs/42564795485)
+- [Passing GitHub Actions run](https://github.com/laurajoyhutchins/h11/actions/runs/42565274439)
 
-The complete report generated in CI is identified by SHA-256 `ab7e2fa3cff635e4098aa10f337a089cef828d8eedf3ac95d61cbed8440ff680`. The observed JSON is a compact summary; it does not duplicate the full generated report.
+The complete report generated in CI is identified by SHA-256 `cadbefe192861b873307b35770df35e22ee0dd39b709ab07d02c3643ee932453`. The observed JSON is a compact summary; it does not duplicate the full generated report.
 
 ## Where this points
 

@@ -31,17 +31,22 @@ unexpected axiom such as `sorryAx`.
 templates. The existing Git source checker additionally requires that every
 other tracked file and every other AST node remain unchanged.
 
-The bridge explicitly assumes the usual CPython meaning of:
+The built-in operations are now grounded in the **Python 3.13 language
+and standard-library specification**, rather than treated as unspecified
+implementation behavior. See [PYTHON_SEMANTICS.md](PYTHON_SEMANTICS.md)
+for a premise-by-premise cross-reference to the official documentation,
+including lowercase bytes `%x` formatting, integer `&` and `>>`,
+bytearray mutation, truth-value testing, and evaluation order.
 
-- `b"%x\r\n" % len(data)` for a nonnegative integer length;
-- `digits[number & 15]`, `number >>= 4`, bytearray reverse and `bytes`;
-- `data` being a byte sequence and `write` a nonthrowing ordered callback.
-
-Lean does **not** verify CPython's interpreter implementation or memory
-safety, arbitrary callback failures, aliasing custom data objects, or
-all external dependency effects. The source bridge is *exact but syntactic*.
-It prevents a silently modified Python function from inheriting the model
-theorem, but it does not constitute a fully formal Python-language refinement.
+Those specifications are distinct from *contextual assumptions*. In
+particular, the theorem requires genuine `bytes` input and a callback
+that only observes the ordered byte arguments. h11 also supports some
+sendfile-style placeholder objects; those are outside this theorem. Python
+permits introspection of function `__code__`, mutable imports and
+runtime instrumentation, so equal callback traces do not imply full
+contextual equivalence. The Python source bridge checks syntax and
+pins the specification note to Git, but does not prove all such
+environmental assumptions.
 
 ## Prior evidence and what is preserved
 

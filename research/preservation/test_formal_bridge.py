@@ -44,6 +44,49 @@ class FormalBridgeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "candidate method"):
             bridge.validate_source_bridge(bridge.OLD_METHOD, candidate)
 
+    def test_python_reference_is_pinned_to_3_13(self) -> None:
+        self.assertEqual(
+            bridge.PYTHON_SEMANTICS_NOTE,
+            "research/preservation/PYTHON_SEMANTICS.md",
+        )
+        self.assertEqual(
+            set(bridge.PYTHON_313_REFERENCES),
+            {
+                "bytes_format_hex", "integer_bitwise",
+                "bytes_and_mutable_sequences", "truth_value_testing",
+                "evaluation_order", "import_context_limits",
+                "function_introspection_limits",
+            },
+        )
+        self.assertTrue(all(
+            url.startswith("https://docs.python.org/3.13/")
+            for url in bridge.PYTHON_313_REFERENCES.values()
+        ))
+
+    def test_runtime_function_introspection_can_distinguish_sources(self) -> None:
+        # Same emitted bytes do not imply arbitrary contextual equivalence.
+        before = {"Writer": object}
+        after = {"Writer": object}
+        exec(bridge.OLD_METHOD, before)
+        exec(bridge.NEW_METHOD, after)
+        old = before["ChunkedWriter"].send_data
+        new = after["ChunkedWriter"].send_data
+        self.assertNotEqual(old.__code__.co_code, new.__code__.co_code)
+
+    def test_annotation_does_not_restrict_runtime_data_to_bytes(self) -> None:
+        namespace = {"Writer": object}
+        exec(bridge.OLD_METHOD, namespace)
+
+        class Placeholder:
+            def __len__(self) -> int:
+                return 3
+
+        data = Placeholder()
+        observed: list[object] = []
+        namespace["ChunkedWriter"]().send_data(data, observed.append)
+        self.assertIs(observed[1], data)
+        self.assertEqual(observed[0], b"3\\r\\n")
+
     def test_allowed_axioms_are_accepted(self) -> None:
         bridge.validate_proof_output(
             "Lean (version 4.35.0, x86_64-unknown-linux-gnu)", GOOD_OUTPUT)

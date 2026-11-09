@@ -342,7 +342,11 @@ def main() -> None:
         "falsified": result["hypothesis_falsified_by_soundness_counterexample"],
     }, sort_keys=True), flush=True)
     if result["complete_hypothesis_success"]:
-        raise SystemExit("Protocol success does not prove general soundness")
+        print("PASS_WITHIN_PRE-REGISTERED_SCOPE: not a universal proof", flush=True)
+    elif result["hypothesis_falsified_by_soundness_counterexample"]:
+        print("FALSIFIED: observed change despite exact Git import-closure reuse", flush=True)
+    else:
+        print("INCONCLUSIVE: no observed miss; inspect assessability and savings", flush=True)
 
 
 if __name__ == "__main__":

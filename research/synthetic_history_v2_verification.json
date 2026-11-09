@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "source_repo": "laurajoyhutchins/h11",
+  "source_commit": "62c5068c971579d61fa1b55373390e12f25fd856",
+  "synthetic_branch": "research/synthetic-history-v2",
+  "synthetic_final_commit": "e8c7aeb18731b31cc68d0e658daab6d07773c85e",
+  "source_tree": "5a1cacdb9d0d6e8d18e8161924ae18130da6c130",
+  "synthetic_tree": "5a1cacdb9d0d6e8d18e8161924ae18130da6c130",
+  "workflow_url": "https://github.com/laurajoyhutchins/h11/actions/runs/42549554689",
+  "workflow_status": "completed",
+  "workflow_conclusion": "success",
+  "environment": {
+    "runner": "ubuntu-24.04",
+    "python": "3.13.18",
+    "pytest": "9.0.2"
+  },
+  "checkpoint_result_method": "Upstream h11/tests with PYTHONPATH pointing at checkout; temporary h11/__init__.py shim only if originally missing, removed after test",
+  "all_passed": true,
+  "unique_upstream_tests_in_complete_checkpoint": 78,
+  "checkpoint_test_runs": 540,
+  "checkpoints": [
+    {
+      "label": "foundations",
+      "sha": "02fa04eab35e8394ea51bceb8b96e6c23da7a953",
+      "passed": 6,
+      "failed": 0,
+      "original_h11_init_present": false
+    },
+    {
+      "label": "headers",
+      "sha": "48999ac59198a379decf9f2bd03292c391edc381",
+      "passed": 6,
+      "failed": 0,
+      "original_h11_init_present": false
+    },
+    {
+      "label": "events",
+      "sha": "f28133dcede0bc3d586e082106e7cbf8a0ffee03",
+      "passed": 12,
+      "failed": 0,
+      "original_h11_init_present": false
+    },
+    {
+      "label": "state",
+      "sha": "937ace605bdafee81de7c79b3dee9cf0eadb74bf",
+      "passed": 22,
+      "failed": 0,
+      "original_h11_init_present": false
+    },
+    {
+      "label": "receivebuffer",
+      "sha": "0ad007be3e2df4c2ea720d35cae0f29ee9c2c2f1",
+      "passed": 26,
+      "failed": 0,
+      "original_h11_init_present": false
+    },
+    {
+      "label": "readers",
+      "sha": "7fa2fc81be4a0ac1e656273351f2b8bd8c56032b",
+      "passed": 26,
+      "failed": 0,
+      "original_h11_init_present": false
+    },
+    {
+      "label": "writers-independent",
+      "sha": "554d16354a927e2f9064c8dfadcf7a8ffaceaf8b",
+      "passed": 26,
+      "failed": 0,
+      "original_h11_init_present": false
+    },
+    {
+      "label": "merged-codecs",
+      "sha": "49d8d15653b088f80d4ceddd0260932c53ce43cf",
+      "passed": 26,
+      "failed": 0,
+      "original_h11_init_present": false
+    },
+    {
+      "label": "connection",
+      "sha": "0e1a9e732b8e887d1fce59e68906548d6a6f5ec5",
+      "passed": 78,
+      "failed": 0,
+      "original_h11_init_present": true
+    },
+    {
+      "label": "distribution",
+      "sha": "0d6df2989acb43df7c62c592af960c3312d10980",
+      "passed": 78,
+      "failed": 0,
+      "original_h11_init_present": true
+    },
+    {
+      "label": "docs-independent",
+      "sha": "e54a10d50714d7a70eaf071f3870a9807c0f286c",
+      "passed": 78,
+      "failed": 0,
+      "original_h11_init_present": true
+    },
+    {
+      "label": "merged-documentation",
+      "sha": "64a00f7f4eac381512d6e26b7034aa1d7578010a",
+      "passed": 78,
+      "failed": 0,
+      "original_h11_init_present": true
+    },
+    {
+      "label": "final",
+      "sha": "e8c7aeb18731b31cc68d0e658daab6d07773c85e",
+      "passed": 78,
+      "failed": 0,
+      "original_h11_init_present": true
+    }
+  ],
+  "limitations": [
+    "Full upstream pytest is executed at each Git checkpoint, but earlier checks need an uncommitted empty h11/__init__.py to make relative imports collect.",
+    "The experiment does not establish buildability as standalone distributions for early commits.",
+    "The graph is attached to upstream original history, not independent synthetic root.",
+    "One Python version tested, not full upstream support matrix.",
+    "Navigation comparison is unblinded retrospective retrieval pilot, not human/agent productivity measure."
+  ]
+}

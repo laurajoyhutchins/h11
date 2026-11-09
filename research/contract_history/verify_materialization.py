@@ -128,6 +128,6 @@ for node in LEDGER["nodes"]:
     print(f"{node['id']:<20} {tree} {len(files)} original blobs; parent(s) verified")
 
 assert tree_sha(nodes["complete"]["files"])==expected_tree
-assert git("rev-parse","research/contract-generated-history")==commits["complete"]["sha"]
+assert git("rev-parse","refs/remotes/origin/research/contract-generated-history")==commits["complete"]["sha"]
 assert not git("diff","--name-only",source["commit"],commits["complete"]["sha"])
 print("VERIFIED: exact tree, dependency closures, contract stages, ancestry and unchanged source")

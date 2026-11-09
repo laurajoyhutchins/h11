@@ -313,7 +313,7 @@ def attach_contracts(contracts: dict, links: dict, verified: dict,
                 raise ValueError("Contract implementation blob SHA differs from pinned source: " + name)
         expected_paths = set(spec.get("import_closure", []))
         actual_paths = {discovery["production_modules"][m]["path"]
-                        for module in required_modules for m in module_closure[m]}
+                        for module in required_modules for m in module_closure[module]}
         if expected_paths and expected_paths != actual_paths:
             raise ValueError("Contract source import closure differs from independently declared specification: " + name)
         stage = by_stage[spec["introduced_at"]]

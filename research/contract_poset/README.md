@@ -101,6 +101,39 @@ The Git object projection has no non-standard Python dependencies. It is verifie
 
 The complete report generated in CI is identified by SHA-256 `cadbefe192861b873307b35770df35e22ee0dd39b709ab07d02c3643ee932453`. The observed JSON is a compact summary; it does not duplicate the full generated report.
 
+## Carrying previous evidence across Git branches
+
+The [source-identity evidence index](evidence_index.py) consumes the discovered runtime import graph, existing contract specifications, explicit semantic prerequisites, and prior independent-oracle evidence. It checks exact Git blob IDs and file modes for the entire declared source closure of each claim, rather than merely its defining source file.
+
+A claim is `REUSE_ELIGIBLE` only if its earlier bounded oracle reported verification and killed at least one selected semantic mutant; every file in its source closure has the identical original Git object; no dynamic or unresolved imports remain; and all its explicitly declared prerequisite claims are eligible. Otherwise the index returns `REVERIFY_REQUIRED` with precise reasons and affected modules. Even comment-only edits conservatively invalidate source-identity reuse.
+
+The index works on arbitrary existing Git revisions and **does not require a synthetic stage ledger**:
+
+```bash
+python research/contract_poset/evidence_index.py /path/to/repository \
+  --discovery /tmp/h11-discovery.json \
+  --contracts research/contract_history/contracts.json \
+  --links research/contract_poset/h11_claim_links.json \
+  --verified research/contract_verify/h11_verified_summary.json \
+  --ref 62c5068c971579d61fa1b55373390e12f25fd856 \
+  --ref HEAD \
+  --output /tmp/evidence-reuse.json
+```
+
+The [passing experiment](https://github.com/laurajoyhutchins/h11/actions/runs/42566035112) ran 20 tests, including two independent disposable Git branches and a real two-parent merge:
+
+| Revision | Reader evidence | Writer evidence | Composition evidence |
+| --- | --- | --- | --- |
+| Original Git source | Eligible | Eligible | Eligible |
+| Documentation-only commit | Eligible | Eligible | Eligible |
+| Reader implementation changed | Reverify | Eligible | Reverify |
+| Writer implementation changed | Eligible | Reverify | Reverify |
+| Merge of independent changes | Reverify | Reverify | Reverify |
+
+The original source revision, existing source-identical synthetic-final revision, and current research revision all retain source-identity eligibility for three previously reported bounded contract claims. Scratch mutation commits were local to CI and were not pushed. [Machine-readable evidence](evidence_reuse_observed.json) retains the matrix and CI report digest.
+
+**Interpretation limit:** `REUSE_ELIGIBLE` does not mean fresh verification was executed or that a changed whole program or merge is safe. The earlier independent evidence was established in isolated oracle contexts using temporary package shims. A changed initializer, an added integration path, external dependencies, or a different execution environment may still affect behavior. The index consumes a prior verification summary and does not independently authenticate that remote workflow on every read.
+
 ## Where this points
 
 The source import poset may be a useful **index** into the already-existing Git Merkle DAG. A separate attestation ledger can attach bounded semantic contract evidence and dependency links without introducing a second storage system or inventing a unique chronology.

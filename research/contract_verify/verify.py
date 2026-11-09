@@ -35,6 +35,8 @@ def safe_file(root: Path, relative: str) -> Path:
 
 
 def candidate_key(candidate: dict[str, Any]) -> str:
+    if candidate.get("kind") in {"test_exercised_module_closure", "extension_boundary"}:
+        return candidate["id"]
     return "|".join([candidate["join"], *sorted((candidate["left"], candidate["right"]))])
 
 
@@ -65,8 +67,15 @@ def select_modules(spec: dict[str, Any], pair: dict[str, Any], discovery: dict[s
     if not isinstance(requested, list) or not requested or any(not isinstance(x, str) for x in requested):
         raise ValueError("Case modules must be a non-empty list of module names")
     modules = set(requested)
-    if len(modules) != len(requested) or not modules <= {pair["left"], pair["right"]}:
-        raise ValueError("Case must select one or both of the discovered candidate's sibling modules")
+    kind = pair.get("kind", "independent_sibling_pair")
+    if kind == "test_exercised_module_closure":
+        permitted = {pair["module"]}
+    elif kind == "extension_boundary":
+        permitted = {pair["base_module"], pair["derived_module"]}
+    else:
+        permitted = {pair["left"], pair["right"]}
+    if len(modules) != len(requested) or not modules <= permitted:
+        raise ValueError("Case modules must be part of the selected discovered boundary")
     known = discovery["production_modules"]
     closure = set().union(*(set(known[m]["runtime_closure"]) for m in modules))
     if not closure <= set(known):
@@ -142,7 +151,7 @@ def verify(repo: Path, discovery: dict[str, Any], plan: dict[str, Any] | None,
     if timeout <= 0 or timeout > 120:
         raise ValueError("Timeout must be within 0..120 seconds")
     repo = repo.resolve()
-    if discovery.get("schema_version") != 1:
+    if discovery.get("schema_version") not in {1, 2}:
         raise ValueError("Unsupported discovery schema")
     if plan is not None and plan.get("schema_version") != 1:
         raise ValueError("Unsupported oracle-plan schema")
@@ -153,7 +162,11 @@ def verify(repo: Path, discovery: dict[str, Any], plan: dict[str, Any] | None,
     if len(duplicates) != len(set(duplicates)):
         raise ValueError("Duplicate case identifiers")
     mismatches = snapshot_mismatches(repo, discovery)
-    candidates = discovery.get("independent_sibling_candidates", [])
+    candidates = [
+        *discovery.get("independent_sibling_candidates", []),
+        *discovery.get("test_exercised_module_candidates", []),
+        *discovery.get("extension_boundary_candidates", []),
+    ]
     by_key = {candidate_key(p): p for p in candidates}
     result: dict[str, Any] = {
         "schema_version": 1,

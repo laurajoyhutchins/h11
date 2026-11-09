@@ -199,7 +199,7 @@ def reexecute_baseline(baseline: Path, baseline_observations: Path,
     with tempfile.TemporaryDirectory(prefix="h11-sealed-replay-") as tmp:
         regenerated = Path(tmp) / "sealed-observations.json"
         completed = subprocess.run(
-            [sys.executable, "-I",
+            [sys.executable, "-E", "-s", "-S",
              str(baseline / "research/preservation/sealed_reader.py"),
              "--baseline", str(baseline),
              "--baseline-observations", str(baseline_observations),

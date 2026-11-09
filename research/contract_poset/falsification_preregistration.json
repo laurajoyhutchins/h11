@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "title": "Falsification of import-closure-only behavioral-oracle reuse",
+  "preregistered_before_any_evaluation": true,
+  "hypothesis": "Over at least 200 Git revision comparisons across three previously unused Python repositories, a statically recovered import-only source closure predicts all changes in independent observable oracles (zero false reuse decisions) while saving at least 50% of oracle execution time including indexing overhead.",
+  "repos": [
+    {
+      "repository": "pallets-eco/blinker",
+      "commit": "c3364059663df1ddce32799d6b1922af89a345f6",
+      "package": "blinker",
+      "focus": "blinker.base",
+      "source": "src",
+      "history_first_parent_revisions": 70,
+      "oracle": "import blinker.Signal; connect a strong callback; send and record returned receiver values, not just a test's pass/fail"
+    },
+    {
+      "repository": "python-hyper/hpack",
+      "commit": "6aa8c0b2265f558f7184047aa09dcc573e625f82",
+      "package": "hpack",
+      "focus": "hpack.hpack",
+      "source": "src",
+      "history_first_parent_revisions": 70,
+      "oracle": "import public Encoder and Decoder; encode and decode fixed HTTP/2 header tuples; record encoded bytes and decoded values"
+    },
+    {
+      "repository": "python-hyper/hyperframe",
+      "commit": "632e309bf6d76d6a3cd04e3cbc0b006eddbf7056",
+      "package": "hyperframe",
+      "focus": "hyperframe.frame",
+      "source": "src",
+      "history_first_parent_revisions": 70,
+      "oracle": "import public Frame and DataFrame; serialize fixed DATA frame; decode frame header and body; record bytes and decoded payload"
+    }
+  ],
+  "comparison": "Each of 70 consecutive first-parent historical revisions per repo is compared with its pinned HEAD, for 210 candidate comparisons; no changed-source candidate is removed on the basis of results. In addition, a syntactically valid local-only adversarial change to package __init__.py is applied to each repo after the pinned HEAD; source-module graph itself is not altered.",
+  "static_predictor": "AST-declared production imports reachable from the focus module in the pinned HEAD (direct imports and relative imports), exact pinned Git blob identity of those source module paths; does not infer implicit package initializer runtime edges or other side effects. A missing tracked module forces REFUSE, not reuse.",
+  "decision": "REUSE if all tracked module paths have identical Git blobs; otherwise REVERIFY; any unsupported version or oracle failure is classified UNASSESSABLE, not silently counted correct.",
+  "adversarial_mutations": [
+    {
+      "repo": "pallets-eco/blinker",
+      "path": "src/blinker/__init__.py",
+      "operation": "append monkeypatch Signal.send to return an empty list"
+    },
+    {
+      "repo": "python-hyper/hpack",
+      "path": "src/hpack/__init__.py",
+      "operation": "append monkeypatch Encoder.encode to return empty encoded bytes"
+    },
+    {
+      "repo": "python-hyper/hyperframe",
+      "path": "src/hyperframe/__init__.py",
+      "operation": "append monkeypatch DataFrame.serialize to return nine zero bytes"
+    }
+  ],
+  "oracle_comparison": "Use a fresh isolated CPython 3.13 process per checked revision. Compare deterministic, canonically encoded JSON behavioral observations; don't count an import error as a changed successful behavior. This tests observed behavior, not normative correctness.",
+  "miss": "An observed successful oracle output differs between pinned revision and target while the predictor says REUSE. Any one miss falsifies the no-misses prediction for the tested scope.",
+  "timing": "Measure total control oracle subprocess time for assessable target revisions. Counterfactual experiment cost = wall clock static index computation + target oracle time for REVERIFY decisions. Report both and sampling limitations. Do not combine results across repositories without per-repo figures.",
+  "required_budget": 210,
+  "success_rule": "Only if all 210 historical comparisons are assessable, three adversarial cases are assessable, zero missed changes and >=50% verification time saved.",
+  "failure_rule": "One valid miss suffices to falsify the no-misses prediction regardless of how many history comparisons are assessable. Under 50% savings also falsifies the economic requirement only when timing sample is complete.",
+  "limitations": [
+    "Only the explicitly specified import-only predictor is being challenged; richer semantic dependency models may behave differently.",
+    "Historical behavior changes may be intentional, so this studies oracle-observation preservation rather than whether those changes were regressions.",
+    "Code from untrusted public repositories executes in an isolated ephemeral CI runner, not the local ChatGPT sandbox.",
+    "The fixed oracle set is not complete behavioral coverage and no zero-miss result could prove universal soundness.",
+    "Generated mutation branches remain local to runner and are never pushed."
+  ]
+}

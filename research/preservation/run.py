@@ -95,15 +95,16 @@ def main() -> None:
         ["git", "-C", str(candidate), "diff", "--binary",
          baseline_sha, candidate_sha])
     (work / "candidate.patch").write_bytes(patch)
+    attest_env = dict(os.environ, PYTHONPATH=str(original))
     evidence_command = [
         sys.executable, str(original / "research/preservation/attest.py"),
         "--work", str(work),
         "--baseline", str(original), "--candidate", str(candidate),
     ]
     run(evidence_command[0], evidence_command[1], "emit", *evidence_command[2:],
-        cwd=original)
+        cwd=original, env=attest_env)
     run(evidence_command[0], evidence_command[1], "verify", *evidence_command[2:],
-        cwd=original)
+        cwd=original, env=attest_env)
 
     unsigned = work / "preservation.intoto.json"
     correct = unsigned.read_bytes()
@@ -111,10 +112,10 @@ def main() -> None:
     invalid["predicate"]["result"] = "FAILED"
     unsigned.write_text(json.dumps(invalid, sort_keys=True) + "\n")
     run(evidence_command[0], evidence_command[1], "verify", *evidence_command[2:],
-        cwd=original, expect_failure=True)
+        cwd=original, env=attest_env, expect_failure=True)
     unsigned.write_bytes(correct)
     run(evidence_command[0], evidence_command[1], "verify", *evidence_command[2:],
-        cwd=original)
+        cwd=original, env=attest_env)
 
 
     probe(mutant, "candidate", work / "mutant-observations.json")

@@ -23,6 +23,19 @@ REQUIRED_THEOREMS = (
     "HexPreservation.messageTrace_eq_for_all_inputs",
 )
 ALLOWED_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
+
+PYTHON_SEMANTICS_NOTE = "research/preservation/PYTHON_SEMANTICS.md"
+# These are specifications supporting the Python AST interpretation, not extra
+# Lean theorems. See PYTHON_SEMANTICS.md for the remaining contextual premises.
+PYTHON_313_REFERENCES = {
+    "bytes_format_hex": "https://docs.python.org/3.13/library/stdtypes.html#printf-style-bytes-formatting",
+    "integer_bitwise": "https://docs.python.org/3.13/library/stdtypes.html#bitwise-operations-on-integer-types",
+    "bytes_and_mutable_sequences": "https://docs.python.org/3.13/library/stdtypes.html#binary-sequence-types-bytes-bytearray-memoryview",
+    "truth_value_testing": "https://docs.python.org/3.13/library/stdtypes.html#truth-value-testing",
+    "evaluation_order": "https://docs.python.org/3.13/reference/expressions.html#evaluation-order",
+    "import_context_limits": "https://docs.python.org/3.13/reference/import.html",
+    "function_introspection_limits": "https://docs.python.org/3.13/reference/datamodel.html",
+}
 OLD_METHOD = r'''
 class ChunkedWriter:
     def send_data(self, data: bytes, write: Writer) -> None:
@@ -123,6 +136,12 @@ def verify_bridge(root: Path, baseline: Path, candidate: Path) -> dict:
     source_evidence = source_obligations(candidate, old_sha, new_sha)
     if git_bytes(baseline, "status", "--porcelain") or git_bytes(candidate, "status", "--porcelain"):
         raise ValueError("dirty Git input to proof bridge")
+    note = root / PYTHON_SEMANTICS_NOTE
+    head = git_bytes(root, "rev-parse", "HEAD").decode().strip()
+    if not note.is_file() or note.read_bytes() != git_bytes(
+        root, "show", f"{head}:{PYTHON_SEMANTICS_NOTE}"
+    ):
+        raise ValueError("Python specification note differs from source Git commit")
     return {
         "source_restriction": source_evidence,
         "original_method_ast_sha256": hashlib.sha256(
@@ -130,6 +149,17 @@ def verify_bridge(root: Path, baseline: Path, candidate: Path) -> dict:
         "candidate_method_ast_sha256": hashlib.sha256(
             ast.dump(method(new), include_attributes=False).encode()).hexdigest(),
         "source_bridge_checked": True,
+        "python_language_specification": {
+            "version": "3.13",
+            "documentation_path": PYTHON_SEMANTICS_NOTE,
+            "documentation_sha256": hashlib.sha256(note.read_bytes()).hexdigest(),
+            "official_references": PYTHON_313_REFERENCES,
+            "interpretation": (
+                "The Python documentation specifies built-in operations; "
+                "reader frame independence and callback observation restrictions "
+                "are separate unproved context assumptions."
+            ),
+        },
     }
 
 
@@ -150,7 +180,8 @@ def main() -> None:
             "Python %x on nonnegative integers follows standard lowercase hexadecimal representation",
             "Python nonnegative integer & 15 and >> 4 agree with Nat bitwise operations",
             "Input Data.data is bytes and len(data) is its nonnegative byte length",
-            "Write callback is nonthrowing, ordered, and does not mutate input data",
+            "Write callback observes only argument values/order and does not throw or mutate input",
+            "Reader does not introspect the modified writer method, module state, or code object",
             "Python executions use unchanged runtime dependencies and relevant reader context",
         ],
         "scope": "all finite sequences of arbitrary finite byte payloads, including empty chunks",

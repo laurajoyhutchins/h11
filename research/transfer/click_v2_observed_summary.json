@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "trial": "preregistered second transfer: v2 boundary discovery",
+  "preregistration": "research/transfer/click_v2_preregistration.json",
+  "method": "Source-only Python AST + test import analysis; no target package imported or original tests executed.",
+  "source_pins": {
+    "h11": "62c5068c971579d61fa1b55373390e12f25fd856",
+    "itsdangerous": "672971d66a2ef9f85151e53283113f33d642dabd",
+    "click": "8abb77a8432e03ed14a95f972b44f905279415a7"
+  },
+  "workflow": {
+    "url": "https://github.com/laurajoyhutchins/h11/actions/runs/42559614934",
+    "conclusion": "success",
+    "runner": "ubuntu-24.04",
+    "python": "3.13"
+  },
+  "results": {
+    "h11": {
+      "production_modules": 11,
+      "test_files": 9,
+      "independent_siblings": 1,
+      "test_exercised_modules": 8,
+      "extension_boundaries": 27,
+      "cross_module_extensions": 15,
+      "unresolved_bases": 0,
+      "facade_only_tests": 1,
+      "discovery_json_sha256": "89ca692ca7a00b4efef8f256e82c067c5e9d1b37b7786c82f3725bcff7cf8adf"
+    },
+    "itsdangerous": {
+      "production_modules": 8,
+      "test_files": 5,
+      "independent_siblings": 0,
+      "test_exercised_modules": 6,
+      "extension_boundaries": 14,
+      "cross_module_extensions": 5,
+      "unresolved_bases": 2,
+      "facade_only_tests": 0,
+      "discovery_json_sha256": "86db8125bad7c6101ba287fbea183b6ff6ed8ef6b9e10ef8ff004ad9b89886d2"
+    },
+    "click": {
+      "production_modules": 17,
+      "test_files": 43,
+      "independent_siblings": 0,
+      "test_exercised_modules": 12,
+      "extension_boundaries": 44,
+      "cross_module_extensions": 0,
+      "unresolved_bases": 19,
+      "facade_only_tests": 23,
+      "discovery_json_sha256": "758f7f2a631076e736784a18a155c7e3ceed370c08e0358116600485693707df"
+    }
+  },
+  "verification_control": {
+    "target": "click",
+    "discovered_candidate_count": 56,
+    "independent_oracles_supplied": 0,
+    "classification": "INSUFFICIENT_EVIDENCE",
+    "count": 56,
+    "stale_source_mismatches": 0
+  },
+  "unit_tests": {
+    "v2_structural": 7,
+    "v1_structural": 6,
+    "verifier": 9,
+    "total": 22,
+    "all_passed": true
+  },
+  "followup_verifier_regression": {
+    "run_url": "https://github.com/laurajoyhutchins/h11/actions/runs/42559792857",
+    "new_verifier_test_count": 10,
+    "passed": 10,
+    "v2_extension_and_test_closure_oracles_in_toy_package": true
+  },
+  "limitations": [
+    "Matching classes in an inheritance hierarchy does not establish behavioral subtyping.",
+    "Test imports do not prove tests exercise the imported module's behavior.",
+    "23 Click tests imported only the facade, and were not attributed to private modules.",
+    "19 Click base expressions were not statically resolved; no invented edges were added.",
+    "No independent semantic oracles supplied for Click; all 56 candidates remain insufficient evidence.",
+    "Source-only holdout run does not claim original Click test execution.",
+    "The experiment uses one unfamiliar repository in addition to two already analyzed projects; general utility is not established."
+  ]
+}

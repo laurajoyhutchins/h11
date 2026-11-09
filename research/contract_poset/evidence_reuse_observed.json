@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "experiment": "Git-object bound evidence reuse across independent branches",
+  "code": "research/contract_poset/evidence_index.py",
+  "tests": "research/contract_poset/test_evidence_index.py",
+  "verification": {
+    "url": "https://github.com/laurajoyhutchins/h11/actions/runs/42566035112",
+    "status": "success",
+    "total_unittest_cases": 20,
+    "prior_poset_tests": 10,
+    "new_evidence_index_tests": 10,
+    "ephemeral_branch_result_sha256": "df182a871e9ddc84085cd9a1332c4d4928f797d5619be422fc33c52b0dbba841"
+  },
+  "source": {
+    "commit": "62c5068c971579d61fa1b55373390e12f25fd856",
+    "tree_oid": "5a1cacdb9d0d6e8d18e8161924ae18130da6c130",
+    "semantic_claims": [
+      "http1.chunked.reader",
+      "http1.chunked.writer",
+      "http1.chunked.composition"
+    ]
+  },
+  "existing_refs": [
+    {
+      "ref": "original",
+      "same_source_closures": true,
+      "eligible_claims": 3,
+      "reverify_claims": 0
+    },
+    {
+      "ref": "existing generated-history final",
+      "same_source_closures": true,
+      "eligible_claims": 3,
+      "reverify_claims": 0
+    },
+    {
+      "ref": "evidence-branch HEAD",
+      "same_source_closures": true,
+      "eligible_claims": 3,
+      "reverify_claims": 0
+    }
+  ],
+  "scratch_branch_experiment": [
+    {
+      "revision": "original pinned h11",
+      "reader": "REUSE_ELIGIBLE",
+      "writer": "REUSE_ELIGIBLE",
+      "composition": "REUSE_ELIGIBLE"
+    },
+    {
+      "revision": "add evidence document only",
+      "reader": "REUSE_ELIGIBLE",
+      "writer": "REUSE_ELIGIBLE",
+      "composition": "REUSE_ELIGIBLE"
+    },
+    {
+      "revision": "read chunk length mutant",
+      "reader": "REVERIFY_REQUIRED",
+      "writer": "REUSE_ELIGIBLE",
+      "composition": "REVERIFY_REQUIRED"
+    },
+    {
+      "revision": "writer terminal chunk mutant",
+      "reader": "REUSE_ELIGIBLE",
+      "writer": "REVERIFY_REQUIRED",
+      "composition": "REVERIFY_REQUIRED"
+    },
+    {
+      "revision": "actual two-parent merge combining reader and writer mutants",
+      "reader": "REVERIFY_REQUIRED",
+      "writer": "REVERIFY_REQUIRED",
+      "composition": "REVERIFY_REQUIRED"
+    }
+  ],
+  "additional_tests": [
+    "Changing a common source dependency invalidates both independent contract source closures and composition.",
+    "Deleting the reader module does not invalidate writer's isolated closure.",
+    "Explicit semantic claims propagate invalidation even if a contract's chosen source subset has no direct blob changes.",
+    "Changing reported oracle status to insufficient evidence cannot yield reuse eligibility.",
+    "Dynamic or unresolved imports block reusing static closure evidence.",
+    "Mismatched contract implementation blobs or unsupported prerequisites fail closed.",
+    "Duplicate revision selection and mismatched source evidence pins fail closed."
+  ],
+  "boundaries": [
+    "Exact git blob identity and static source closure under a pinned basis, not a result of whole-program integration verification.",
+    "Previously published independent verification evidence is referenced from a summary and not rerun or externally authenticated in this experiment.",
+    "Source changes without behavioral effects can still require re-verification; this is a conservative false positive.",
+    "Unrelated added files, changed package initializers, environment differences, and dependency oracles can affect behavior outside the isolated-closure scope.",
+    "Scratch branch commits are disposable; existing upstream h11 master and contract-generated histories were never changed.",
+    "Git merge ancestry alone does not certify semantic composition."
+  ],
+  "interpretation": "Evidence reuse is conditional on exact source-closure identity and explicit claim prerequisite eligibility, not whether two commits share ancestors or are topologically adjacent."
+}

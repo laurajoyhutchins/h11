@@ -128,7 +128,7 @@ def source_frame(baseline: Path, candidate: Path) -> dict[str, Any]:
         "candidate_git_tree": bounds["candidate_tree"],
         "declared_modules": sorted(closure),
         "module_digests": deps,
-        "writer_module_unreachable_via_checked_imports": True,
+        "writer_absent_from_checked_direct_import_closure": True,
         "package_initializer_bypassed_by_sealed_runner": True,
         "reader_source_unchanged": True,
         "context": "fresh isolated Python process, inert h11 package stub, no caller mutation",
@@ -232,7 +232,7 @@ def main() -> None:
                        args.prior.resolve(), observed)
     certificate = verify_observations(frame, observed, prior)
     args.output.write_text(json.dumps(certificate, sort_keys=True, indent=2) + "\n")
-    print("READER_FRAME_PROVED", len(frame["declared_modules"]),
+    print("READER_FRAME_VERIFIED", len(frame["declared_modules"]),
           "unchanged reader modules; 24 sealed baseline cases; 0 candidate reader runs")
 
 

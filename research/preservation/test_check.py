@@ -24,13 +24,13 @@ class PreservationTests(unittest.TestCase):
             "schema_version": 1, "role": "baseline",
             "corpus_sha256": digest([self.case]),
             "segments": list(SEGMENTS),
-            "rows": [{"id": self.case["id"], "writes": self.writes,
+            "rows": [{"id": self.case["id"], "writes": list(self.writes),
                       "downstream": [observation] * len(SEGMENTS)}],
         }
         self.candidate = {
             "schema_version": 1, "role": "candidate",
             "corpus_sha256": digest([self.case]), "segments": [],
-            "rows": [{"id": self.case["id"], "writes": self.writes}],
+            "rows": [{"id": self.case["id"], "writes": list(self.writes)}],
         }
 
     def verify(self):

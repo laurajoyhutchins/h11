@@ -14,7 +14,18 @@ import os
 import sys
 from pathlib import Path
 
-from select import select as ranked_select
+# Load the research ranking module by path without importing it as "select",
+# which would shadow CPython's native select module used by subprocess.
+import importlib.util
+_SCRIPT_DIR = Path(__file__).resolve().parent
+sys.path[:] = [p for p in sys.path if Path(p or ".").resolve() != _SCRIPT_DIR]
+_SPEC = importlib.util.spec_from_file_location("research_ranking", _SCRIPT_DIR / "select.py")
+if _SPEC is None or _SPEC.loader is None:
+    raise RuntimeError("Cannot load pinned ranking implementation")
+_RANKING = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(_RANKING)
+ranked_select = _RANKING.select
+
 from blind_transfer import git, mutants, pytest_result
 
 EXPECTED_TREE = "5a1cacdb9d0d6e8d18e8161924ae18130da6c130"

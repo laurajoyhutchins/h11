@@ -181,6 +181,10 @@ class ExplicitClaimsTests(unittest.TestCase):
                 {"id": "composition-probe", "status": "VERIFIED_WITHIN_SCOPE", "semantic_mutants_killed": 1},
             ]},
         }
+        source_discovery = {"production_modules": {
+            "m.reader": {"path": "m/reader.py", "blob_sha": "a" * 40},
+            "m.writer": {"path": "m/writer.py", "blob_sha": "b" * 40},
+        }}
         links = {"source_commit": "1", "claims": [
             {"id": "c.reader", "modules": ["m.reader"],
              "depends_on": [], "evidence_case": "reader-probe"},
@@ -189,7 +193,7 @@ class ExplicitClaimsTests(unittest.TestCase):
             {"id": "c.compose", "modules": ["m.reader", "m.writer"],
              "depends_on": ["c.reader", "c.writer"], "evidence_case": "composition-probe"},
         ]}
-        result = attach_contracts(contracts, links, verified, clos, git_stages, {})
+        result = attach_contracts(contracts, links, verified, clos, git_stages, source_discovery)
         self.assertEqual(result["number_of_claim_order_ideals"], 5)
         self.assertEqual(result["stage_claim_projection"]["reader"]["claims_present_by_explicit_links"],
                          ["c.reader"])
@@ -200,7 +204,7 @@ class ExplicitClaimsTests(unittest.TestCase):
         bad = {"source_commit": "1", "claims": [dict(v) for v in links["claims"]]}
         bad["claims"][-1]["depends_on"] = ["c.reader", "not-real"]
         with self.assertRaisesRegex(ValueError, "unknown prerequisite"):
-            attach_contracts(contracts, bad, verified, clos, git_stages, {})
+            attach_contracts(contracts, bad, verified, clos, git_stages, source_discovery)
 
 
 if __name__ == "__main__":

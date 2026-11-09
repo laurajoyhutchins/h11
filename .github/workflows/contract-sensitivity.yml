@@ -1,0 +1,76 @@
+name: Research synthetic-history test sensitivity
+
+on:
+  push:
+    branches: [research/synthetic-history-evidence]
+    paths: [.github/workflows/contract-sensitivity.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mutation-probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install pytest==9.0.2
+      - name: Test real semantic mutants against original upstream tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '## Mutation sensitivity of original tests' >> "$GITHUB_STEP_SUMMARY"
+          echo '| Module mutation | Checkpoint | Original tests | Detection |' >> "$GITHUB_STEP_SUMMARY"
+          echo '| --- | --- | --- | --- |' >> "$GITHUB_STEP_SUMMARY"
+          # Expected: early stage misses mutation; complete Connection stage detects it.
+          while IFS='|' read -r label sha module kind expected; do
+            git checkout --quiet --force --detach "$sha"
+            if [[ ! -f h11/__init__.py ]]; then
+              printf '# Temporary package shim for relative test imports\n' > h11/__init__.py
+            fi
+            MODULE="$module" KIND="$kind" python - <<'PY'
+          import os
+          from pathlib import Path
+          p=Path("h11") / os.environ["MODULE"]
+          text=p.read_text()
+          if os.environ["KIND"]=="reader":
+              old='self._bytes_in_chunk = int(matches["chunk_size"], base=16)'
+              new='self._bytes_in_chunk = int(matches["chunk_size"], base=16) + 1'
+          else:
+              old='write(b"%x\\r\\n" % len(data))'
+              new='write(b"%x\\r\\n" % (len(data) + 1))'
+          assert text.count(old)==1, (p, old, text.count(old))
+          p.write_text(text.replace(old, new))
+          PY
+            set +e
+            PYTHONPATH="$GITHUB_WORKSPACE" python -m pytest -q h11/tests > /tmp/mutant.log 2>&1
+            status=$?
+            set -e
+            if [[ "$expected" == "miss" ]]; then
+              if [[ "$status" != 0 ]]; then
+                echo "Expected early checkpoint to miss $label but tests failed:"
+                tail -n 60 /tmp/mutant.log
+                exit 1
+              fi
+              echo "| $kind | $label | $(tail -n 1 /tmp/mutant.log) | MISSED mutant |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              if [[ "$status" != 1 ]] || ! grep -Eq '[0-9]+ failed' /tmp/mutant.log; then
+                echo "Expected semantic test failure for $label (exit 1) but got $status:"
+                tail -n 65 /tmp/mutant.log
+                exit 1
+              fi
+              echo "| $kind | $label | $(tail -n 1 /tmp/mutant.log) | DETECTED mutant |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+            echo "$label ($kind): expected=$expected exit=$status $(tail -n 1 /tmp/mutant.log)"
+          done <<'STAGES'
+          early-reader|7fa2fc81be4a0ac1e656273351f2b8bd8c56032b|_readers.py|reader|miss
+          integrated-reader|0e1a9e732b8e887d1fce59e68906548d6a6f5ec5|_readers.py|reader|detect
+          early-writer|554d16354a927e2f9064c8dfadcf7a8ffaceaf8b|_writers.py|writer|miss
+          integrated-writer|0e1a9e732b8e887d1fce59e68906548d6a6f5ec5|_writers.py|writer|detect
+          STAGES

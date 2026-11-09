@@ -1,0 +1,196 @@
+{
+  "baseline": {
+    "exit_code": 0,
+    "stderr_tail": ".. [ 24%]\n........................................................................ [ 48%]\n........................................................................ [ 72%]\n........................................................................ [ 96%]\n.........                                                                [100%]\n297 passed in 1.01s\n",
+    "summary": [
+      "297 passed in 1.01s"
+    ],
+    "verdict": "PASS"
+  },
+  "conclusion": "TEST_SENSITIVITY_ONLY_NOT_CONTRACT_VERIFICATION",
+  "detected": 7,
+  "invalid": 2,
+  "production_modules": 8,
+  "selected": [
+    {
+      "module": "itsdangerous.encoding",
+      "source": "src/itsdangerous/encoding.py",
+      "test": "tests/test_itsdangerous/test_encoding.py"
+    },
+    {
+      "module": "itsdangerous.serializer",
+      "source": "src/itsdangerous/serializer.py",
+      "test": "tests/test_itsdangerous/test_serializer.py"
+    },
+    {
+      "module": "itsdangerous.signer",
+      "source": "src/itsdangerous/signer.py",
+      "test": "tests/test_itsdangerous/test_signer.py"
+    },
+    {
+      "module": "itsdangerous.timed",
+      "source": "src/itsdangerous/timed.py",
+      "test": "tests/test_itsdangerous/test_timed.py"
+    },
+    {
+      "module": "itsdangerous.url_safe",
+      "source": "src/itsdangerous/url_safe.py",
+      "test": "tests/test_itsdangerous/test_url_safe.py"
+    }
+  ],
+  "sibling_candidates": [],
+  "source_clean": true,
+  "survived": 0,
+  "target_commit": "672971d66a2ef9f85151e53283113f33d642dabd",
+  "target_repo": "pallets/itsdangerous",
+  "target_tree": "ef4287f82d8234404b58c7b29d38197e1f38e207",
+  "tests_discovered": 5,
+  "trials": [
+    {
+      "line": 14,
+      "module": "itsdangerous.encoding",
+      "mutant_id": "2781cbed7ee996b7",
+      "mutation": "invert-conditional",
+      "result": {
+        "exit_code": 1,
+        "stderr_tail": "a bytes-like object is required, not 'str'\nFAILED tests/test_itsdangerous/test_encoding.py::test_base64[infinite] - AttributeError: 'bytes' object has no attribute 'encode'. Did you mean: 'decode'?\nFAILED tests/test_itsdangerous/test_encoding.py::test_base64_bad - TypeError: can only concatenate str (not \"bytes\") to str\n5 failed, 3 passed in 0.07s\n",
+        "summary": [
+          "5 failed, 3 passed in 0.07s"
+        ],
+        "verdict": "DETECTED_BY_ORIGINAL_TEST_FAILURE"
+      },
+      "source_condition": "isinstance(s, str)",
+      "test": "tests/test_itsdangerous/test_encoding.py"
+    },
+    {
+      "line": 222,
+      "module": "itsdangerous.serializer",
+      "mutant_id": "0925eb7f129511d3",
+      "mutation": "invert-conditional",
+      "result": {
+        "exit_code": 1,
+        "stderr_tail": "signers[Serializer] - TypeError: NoneType takes no arguments\nFAILED tests/test_itsdangerous/test_serializer.py::TestSerializer::test_iter_unsigners[serializer_factory1] - TypeError: NoneType takes no arguments\nFAILED tests/test_itsdangerous/test_serializer.py::test_digests - TypeError: 'NoneType' object is not callable\n40 failed, 1 passed in 0.48s\n",
+        "summary": [
+          "40 failed, 1 passed in 0.48s"
+        ],
+        "verdict": "DETECTED_BY_ORIGINAL_TEST_FAILURE"
+      },
+      "source_condition": "signer is None",
+      "test": "tests/test_itsdangerous/test_serializer.py"
+    },
+    {
+      "line": 260,
+      "module": "itsdangerous.serializer",
+      "mutant_id": "3c6fff038f6650b5",
+      "mutation": "invert-conditional",
+      "result": {
+        "exit_code": 1,
+        "stderr_tail": "adPayload: Could not load the payload because an exception occurred on unserializing the data.\nFAILED tests/test_itsdangerous/test_serializer.py::TestSerializer::test_fallback_signers[serializer_factory1] - itsdangerous.exc.BadPayload: Could not load the payload because an exception occurred on unserializing the data.\n17 failed, 24 passed in 0.32s\n",
+        "summary": [
+          "17 failed, 24 passed in 0.32s"
+        ],
+        "verdict": "DETECTED_BY_ORIGINAL_TEST_FAILURE"
+      },
+      "source_condition": "is_text",
+      "test": "tests/test_itsdangerous/test_serializer.py"
+    },
+    {
+      "line": 146,
+      "module": "itsdangerous.signer",
+      "mutant_id": "07c1c17ded288076",
+      "mutation": "invert-conditional",
+      "result": {
+        "exit_code": 1,
+        "stderr_tail": "ined in the signature itself. ASCII letters, digits, and '-_=' must not be used.\nERROR tests/test_itsdangerous/test_signer.py::TestSigner::test_changed_value - ValueError: The given separator cannot be used because it may be contained in the signature itself. ASCII letters, digits, and '-_=' must not be used.\n12 failed, 1 passed, 4 errors in 0.12s\n",
+        "summary": [
+          "12 failed, 1 passed, 4 errors in 0.12s"
+        ],
+        "verdict": "BLOCKED_OR_INVALID"
+      },
+      "source_condition": "self.sep in _base64_alphabet",
+      "test": "tests/test_itsdangerous/test_signer.py"
+    },
+    {
+      "line": 253,
+      "module": "itsdangerous.signer",
+      "mutant_id": "10e7b82aceb2c865",
+      "mutation": "invert-conditional",
+      "result": {
+        "exit_code": 1,
+        "stderr_tail": "ined in the signature itself. ASCII letters, digits, and '-_=' must not be used.\nERROR tests/test_itsdangerous/test_signer.py::TestSigner::test_changed_value - ValueError: The given separator cannot be used because it may be contained in the signature itself. ASCII letters, digits, and '-_=' must not be used.\n12 failed, 1 passed, 4 errors in 0.12s\n",
+        "summary": [
+          "12 failed, 1 passed, 4 errors in 0.12s"
+        ],
+        "verdict": "BLOCKED_OR_INVALID"
+      },
+      "source_condition": "self.verify_signature(value, sig)",
+      "test": "tests/test_itsdangerous/test_signer.py"
+    },
+    {
+      "line": 120,
+      "module": "itsdangerous.timed",
+      "mutant_id": "24d307729a4dd495",
+      "mutation": "invert-conditional",
+      "result": {
+        "exit_code": 1,
+        "stderr_tail": "None, datetime)\n +    where None = BadTimeSignature(\"Signature b'YR7LeXge8QKe4WGdzO8Qpdl20Yc' does not match\").date_signed\n +      where BadTimeSignature(\"Signature b'YR7LeXge8QKe4WGdzO8Qpdl20Yc' does not match\") = <ExceptionInfo BadTimeSignature(\"Signature b'YR7LeXge8QKe4WGdzO8Qpdl20Yc' does not match\") tblen=2>.value\n2 failed, 99 passed in 0.32s\n",
+        "summary": [
+          "2 failed, 99 passed in 0.32s"
+        ],
+        "verdict": "DETECTED_BY_ORIGINAL_TEST_FAILURE"
+      },
+      "source_condition": "ts_int is not None",
+      "test": "tests/test_itsdangerous/test_timed.py"
+    },
+    {
+      "line": 141,
+      "module": "itsdangerous.timed",
+      "mutant_id": "29dd5bd8e2ab66f2",
+      "mutation": "invert-conditional",
+      "result": {
+        "exit_code": 1,
+        "stderr_tail": "None, datetime)\n +    where None = BadTimeSignature(\"Signature b'YR7LeXge8QKe4WGdzO8Qpdl20Yc' does not match\").date_signed\n +      where BadTimeSignature(\"Signature b'YR7LeXge8QKe4WGdzO8Qpdl20Yc' does not match\") = <ExceptionInfo BadTimeSignature(\"Signature b'YR7LeXge8QKe4WGdzO8Qpdl20Yc' does not match\") tblen=2>.value\n2 failed, 99 passed in 0.31s\n",
+        "summary": [
+          "2 failed, 99 passed in 0.31s"
+        ],
+        "verdict": "DETECTED_BY_ORIGINAL_TEST_FAILURE"
+      },
+      "source_condition": "age > max_age",
+      "test": "tests/test_itsdangerous/test_timed.py"
+    },
+    {
+      "line": 32,
+      "module": "itsdangerous.url_safe",
+      "mutant_id": "1867f4ff58f5bdb7",
+      "mutation": "invert-conditional",
+      "result": {
+        "exit_code": 1,
+        "stderr_tail": "ue0] - itsdangerous.exc.BadPayload: Could not zlib decompress the payload before decoding the payload\nFAILED tests/test_itsdangerous/test_url_safe.py::TestURLSafeTimedSerializer::test_return_payload[zlib] - itsdangerous.exc.BadPayload: Could not load the payload because an exception occurred on unserializing the data.\n62 failed, 68 passed in 1.23s\n",
+        "summary": [
+          "62 failed, 68 passed in 1.23s"
+        ],
+        "verdict": "DETECTED_BY_ORIGINAL_TEST_FAILURE"
+      },
+      "source_condition": "payload.startswith(b\".\")",
+      "test": "tests/test_itsdangerous/test_url_safe.py"
+    },
+    {
+      "line": 44,
+      "module": "itsdangerous.url_safe",
+      "mutant_id": "48d48e94874a4bd8",
+      "mutation": "invert-conditional",
+      "result": {
+        "exit_code": 1,
+        "stderr_tail": "ue0] - itsdangerous.exc.BadPayload: Could not zlib decompress the payload before decoding the payload\nFAILED tests/test_itsdangerous/test_url_safe.py::TestURLSafeTimedSerializer::test_return_payload[zlib] - itsdangerous.exc.BadPayload: Could not load the payload because an exception occurred on unserializing the data.\n62 failed, 68 passed in 1.13s\n",
+        "summary": [
+          "62 failed, 68 passed in 1.13s"
+        ],
+        "verdict": "DETECTED_BY_ORIGINAL_TEST_FAILURE"
+      },
+      "source_condition": "decompress",
+      "test": "tests/test_itsdangerous/test_url_safe.py"
+    }
+  ],
+  "workflow_run": "https://github.com/laurajoyhutchins/h11/actions/runs/42558585092",
+  "evidence_source": "Decoded, unchanged JSON printed by pinned GitHub Actions runner"
+}

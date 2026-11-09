@@ -78,6 +78,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          export PYTHONPATH="$RUNNER_TEMP/preservation/baseline"
           args=(
             --root "$RUNNER_TEMP/preservation/baseline"
             --baseline "$RUNNER_TEMP/preservation/baseline"

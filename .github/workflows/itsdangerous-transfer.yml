@@ -1,0 +1,97 @@
+name: Blind transfer to pinned ItsDangerous
+
+on:
+  push:
+    branches: [research/synthetic-history-evidence]
+    paths:
+      - .github/workflows/itsdangerous-transfer.yml
+      - research/transfer/blind_transfer.py
+      - research/contract_discovery/discover.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  blind-transfer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Checkout preregistered unfamiliar repository
+        uses: actions/checkout@v4
+        with:
+          repository: pallets/itsdangerous
+          ref: 672971d66a2ef9f85151e53283113f33d642dabd
+          path: trial
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install pinned upstream test dependencies
+        run: |
+          python -m pip install "pytest==9.0.2" "freezegun==1.5.5"
+          python -m pip freeze | grep -Ei "^(pytest|freezegun|packaging|pluggy|iniconfig)=="
+      - name: Verify target revision and untouched source
+        run: |
+          test "$(git -C trial rev-parse HEAD)" = "672971d66a2ef9f85151e53283113f33d642dabd"
+          test "$(git -C trial rev-parse HEAD^{tree})" = "ef4287f82d8234404b58c7b29d38197e1f38e207"
+          test -z "$(git -C trial status --porcelain)"
+      - name: Discover using unchanged ranking and generic src-layout support
+        run: |
+          python research/contract_discovery/test_discover.py -v
+          python research/contract_discovery/discover.py trial \
+            --package itsdangerous --source-dir src --tests tests \
+            --output "$RUNNER_TEMP/transfer_discovery.json"
+      - name: Automatically select tests and challenge source mutants
+        run: |
+          python research/transfer/blind_transfer.py trial \
+            --discovery "$RUNNER_TEMP/transfer_discovery.json" \
+            --revision 672971d66a2ef9f85151e53283113f33d642dabd \
+            --output "$RUNNER_TEMP/transfer_evidence.json"
+          python - <<'PY'
+          import hashlib,json,os
+          from pathlib import Path
+          root=Path(os.environ["RUNNER_TEMP"])
+          discovery=json.loads((root/"transfer_discovery.json").read_text())
+          trial=json.loads((root/"transfer_evidence.json").read_text())
+          assert trial["original_baseline"]["verdict"]=="PASS", trial["original_baseline"]
+          assert trial["target_commit"]=="672971d66a2ef9f85151e53283113f33d642dabd"
+          assert trial["target_tree"]=="ef4287f82d8234404b58c7b29d38197e1f38e207"
+          assert trial["conclusion"]=="TEST_SENSITIVITY_ONLY_NOT_CONTRACT_VERIFICATION"
+          results=[r.get("result",{}).get("verdict") for r in trial["trials"]]
+          summary={
+            "target_repo":"pallets/itsdangerous",
+            "target_commit":trial["target_commit"],
+            "target_tree":trial["target_tree"],
+            "production_modules":len(discovery["production_modules"]),
+            "tests_discovered":len(discovery["tests"]),
+            "sibling_candidates":discovery["independent_sibling_candidates"],
+            "selected":trial["selected"],
+            "baseline":trial["original_baseline"],
+            "trials":trial["trials"],
+            "detected":results.count("DETECTED_BY_ORIGINAL_TEST_FAILURE"),
+            "survived":results.count("PASS"),
+            "invalid":len(results)-results.count("DETECTED_BY_ORIGINAL_TEST_FAILURE")-results.count("PASS"),
+            "conclusion":trial["conclusion"],
+            "source_clean":True,
+          }
+          raw=json.dumps(summary,indent=2,sort_keys=True)
+          print("BEGIN_BLIND_TRANSFER_JSON")
+          print(raw)
+          print("END_BLIND_TRANSFER_JSON")
+          with open(os.environ["GITHUB_STEP_SUMMARY"],"a") as f:
+            f.write("## Preregistered blind transfer: Pallets ItsDangerous\n\n")
+            f.write("Original commit: "+trial["target_commit"]+". Source unchanged.\n\n")
+            f.write("Original test baseline: "+str(trial["original_baseline"]["summary"])+".\n\n")
+            f.write("Structural candidates: "+str(len(discovery["independent_sibling_candidates"]))+".\n\n")
+            f.write("Selected module/test pairs: "+str(len(trial["selected"]))+".\n\n")
+            f.write("Mutants: "+str(len(results))+"; detected "+str(summary["detected"])+", survived "+str(summary["survived"])+", invalid "+str(summary["invalid"])+".\n\n")
+            f.write("No independent behavioral oracle. Existing-suite test sensitivity only, not contract verification.\n\n")
+            f.write("Full trial evidence SHA-256: "+hashlib.sha256((root/"transfer_evidence.json").read_bytes()).hexdigest()+".\n")
+          PY
+          test -z "$(git -C trial status --porcelain)"
+          test "$(git -C trial rev-parse HEAD^{tree})" = "ef4287f82d8234404b58c7b29d38197e1f38e207"

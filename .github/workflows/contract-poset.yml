@@ -5,7 +5,12 @@ on:
     branches: [research/synthetic-history-evidence]
     paths:
       - .github/workflows/contract-poset.yml
-      - research/contract_poset/**
+      - research/contract_poset/poset.py
+      - research/contract_poset/test_poset.py
+      - research/contract_poset/h11_claim_links.json
+      - research/contract_history/generated_commits.json
+      - research/contract_history/contracts.json
+      - research/contract_verify/h11_verified_summary.json
       - research/contract_discovery/discover.py
       - research/contract_discovery/discover_v2.py
   workflow_dispatch:
@@ -40,6 +45,9 @@ jobs:
             --contracts research/contract_history/contracts.json \
             --links research/contract_poset/h11_claim_links.json \
             --verified research/contract_verify/h11_verified_summary.json \
+            --ref 62c5068c971579d61fa1b55373390e12f25fd856 \
+            --ref e8d9391373d3ae3234abe4fe24d2ad0bc8116a81 \
+            --ref HEAD \
             --output "$RUNNER_TEMP/poset.json"
           python - <<'PY'
           import hashlib,json,os,pathlib
@@ -70,6 +78,21 @@ jobs:
           assert stages["complete"]["modules"] == [n["id"] for n in modules["nodes"]]
           assert len(stages)==6
           assert claims["stage_claim_projection"]["codec-composition"]["semantic_claim_frontier"] == ["http1.chunked.composition"]
+          refs=result["existing_git_refs"]
+          assert len(refs)==3
+          assert all(r["status"]=="PINNED_MODULE_IDEAL" for r in refs)
+          assert all(r["is_complete_original_module_set"] for r in refs)
+          assert len({r["ideal_id"] for r in refs})==1
+          assert refs[0]["same_tree_as_source"]
+          assert refs[1]["same_tree_as_source"]
+          assert not refs[2]["same_tree_as_source"]
+          assert refs[2]["additional_paths_beyond_pinned_source"]>0
+          assert refs[0]["commit_oid"]!=refs[1]["commit_oid"]
+          assert refs[0]["tree_oid"]==refs[1]["tree_oid"]
+          print("EXISTING_REFS",json.dumps([{"ref":r["ref"],"commit":r["commit_oid"],
+                                             "tree":r["tree_oid"],"source_ideal":r["ideal_id"],
+                                             "extra_paths":r["additional_paths_beyond_pinned_source"]}
+                                            for r in refs],sort_keys=True))
           print("MODULES",len(modules["nodes"]))
           print("ORDER_IDEALS",modules["number_of_order_ideals"])
           print("MODULE_COVER_EDGES",len(modules["cover_edges"]))
@@ -87,6 +110,8 @@ jobs:
               out.write(f"Existing Git checkpoints checked: **{len(stages)}**; all are dependency-closed import slices.\n\n")
               out.write("Reader and writer branches meet at the foundation and join at codec composition.\n\n")
               out.write("Explicit semantic claims: **3**, five possible dependency-closed claim sets, with earlier external evidence attached.\n\n")
+              out.write("Pinned upstream commit and pre-existing synthetic final commit have **identical Git tree OIDs** but distinct commit identities.\n\n")
+              out.write("Research evidence HEAD has a **different Git tree**, but shares the same module ideal.\n\n")
               out.write("Git ancestry and source import edges are not automatically contract implications.\n\n")
               out.write(f"Full report SHA-256: {digest}.\n")
           PY

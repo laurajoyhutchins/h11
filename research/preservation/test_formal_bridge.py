@@ -85,7 +85,7 @@ class FormalBridgeTests(unittest.TestCase):
         observed: list[object] = []
         namespace["ChunkedWriter"]().send_data(data, observed.append)
         self.assertIs(observed[1], data)
-        self.assertEqual(observed[0], b"3\\r\\n")
+        self.assertEqual(observed[0], b"3\r\n")
 
     def test_allowed_axioms_are_accepted(self) -> None:
         bridge.validate_proof_output(

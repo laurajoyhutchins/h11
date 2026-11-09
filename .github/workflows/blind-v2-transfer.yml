@@ -1,0 +1,122 @@
+name: Blind v2 structural transfer to Click
+
+on:
+  push:
+    branches: [research/synthetic-history-evidence]
+    paths:
+      - .github/workflows/blind-v2-transfer.yml
+      - research/contract_discovery/discover.py
+      - research/contract_discovery/discover_v2.py
+      - research/contract_discovery/test_discover_v2.py
+      - research/contract_verify/verify.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  holdout:
+    name: Pinned source-only transfer and no-oracle control
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Checkout preregistered unfamiliar repository, without modifying upstream
+        uses: actions/checkout@v4
+        with:
+          repository: pallets/click
+          ref: 8abb77a8432e03ed14a95f972b44f905279415a7
+          path: heldout/click
+          persist-credentials: false
+      - name: Checkout previous transfer regression
+        uses: actions/checkout@v4
+        with:
+          repository: pallets/itsdangerous
+          ref: 672971d66a2ef9f85151e53283113f33d642dabd
+          path: heldout/itsdangerous
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Unit tests for generic structural rules
+        run: |
+          PYTHONPATH=research/contract_discovery python -m unittest -v test_discover_v2
+          PYTHONPATH=research/contract_discovery python -m unittest -v test_discover
+          PYTHONPATH=research/contract_discovery:research/contract_verify python -m unittest -v test_verify
+      - name: Read-only discovery at exactly pinned Git objects
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree add --detach "$RUNNER_TEMP/h11-source" 62c5068c971579d61fa1b55373390e12f25fd856
+          test "$(git -C heldout/click rev-parse HEAD)" = 8abb77a8432e03ed14a95f972b44f905279415a7
+          test "$(git -C heldout/itsdangerous rev-parse HEAD)" = 672971d66a2ef9f85151e53283113f33d642dabd
+          python research/contract_discovery/discover_v2.py "$RUNNER_TEMP/h11-source" \
+            --package h11 --tests h11/tests --output "$RUNNER_TEMP/h11-v2.json"
+          python research/contract_discovery/discover_v2.py heldout/itsdangerous \
+            --package itsdangerous --source-dir src --tests tests/test_itsdangerous \
+            --output "$RUNNER_TEMP/itsdangerous-v2.json"
+          python research/contract_discovery/discover_v2.py heldout/click \
+            --package click --source-dir src --tests tests \
+            --output "$RUNNER_TEMP/click-v2.json"
+          python research/contract_discovery/discover_v2.py heldout/click \
+            --package click --source-dir src --tests tests \
+            --output "$RUNNER_TEMP/click-v2-repeat.json"
+          cmp "$RUNNER_TEMP/click-v2.json" "$RUNNER_TEMP/click-v2-repeat.json"
+          python research/contract_verify/verify.py heldout/click \
+            --discovery "$RUNNER_TEMP/click-v2.json" \
+            --output "$RUNNER_TEMP/click-no-oracles.json"
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          root=Path(os.environ["RUNNER_TEMP"])
+          checkouts={"h11":Path(os.environ["RUNNER_TEMP"])/"h11-source",
+                     "itsdangerous":Path("heldout/itsdangerous"),
+                     "click":Path("heldout/click")}
+          results={}
+          for name in ("h11","itsdangerous","click"):
+              raw=(root/(name+"-v2.json")).read_bytes()
+              data=json.loads(raw)
+              assert data["schema_version"]==2
+              assert all(p["status"]=="CANDIDATE_ONLY" for p in data["test_exercised_module_candidates"])
+              assert all(p["status"]=="CANDIDATE_ONLY" for p in data["extension_boundary_candidates"])
+              assert all(p["status"].startswith("candidate") for p in data["independent_sibling_candidates"])
+              stats={
+                  "modules":len(data["production_modules"]),
+                  "test_files":len(data["tests"]),
+                  **data["candidate_counts"],
+                  "top_sibling":data["independent_sibling_candidates"][0]["left"]+" + "+data["independent_sibling_candidates"][0]["right"] if data["independent_sibling_candidates"] else None,
+                  "cross_module_extensions":sum(e["scope"]=="cross-module" for e in data["extension_boundary_candidates"]),
+                  "sha256":hashlib.sha256(raw).hexdigest()
+              }
+              results[name]=stats
+              print(name,json.dumps(stats,sort_keys=True))
+          h11=json.loads((root/"h11-v2.json").read_text())
+          assert any({p["left"],p["right"]}=={"h11._readers","h11._writers"} for p in h11["independent_sibling_candidates"])
+          its=json.loads((root/"itsdangerous-v2.json").read_text())
+          # The old candidate rule had a zero result on this repository.
+          assert len(its["independent_sibling_candidates"])==0
+          control=json.loads((root/"click-no-oracles.json").read_text())
+          expected=(results["click"]["independent_siblings"]+
+                    results["click"]["test_exercised_modules"]+
+                    results["click"]["extension_boundaries"])
+          assert len(control["candidates"])==expected
+          assert all(x["status"]=="INSUFFICIENT_EVIDENCE" for x in control["candidates"])
+          assert control["source_mismatches"]==[]
+          print("CLICK_WITHOUT_ORACLES",len(control["candidates"]),"INSUFFICIENT_EVIDENCE")
+          with open(os.environ["GITHUB_STEP_SUMMARY"],"a") as out:
+              out.write("## Frozen v2 discovery transfer\n\n")
+              out.write("Source: pallets/click at 8abb77a8432e03ed14a95f972b44f905279415a7.\n\n")
+              out.write("| Source | Modules | Tests | Siblings | Test closures | Extensions | Cross-module inheritance |\n")
+              out.write("| --- | ---: | ---: | ---: | ---: | ---: | ---: |\n")
+              for name,d in results.items():
+                  out.write(f"| {name} | {d['modules']} | {d['test_files']} | {d['independent_siblings']} | {d['test_exercised_modules']} | {d['extension_boundaries']} | {d['cross_module_extensions']} |\n")
+              out.write("\nAll discovered Click candidates WITHOUT independent oracles: INSUFFICIENT_EVIDENCE.\n")
+              out.write("\nSource-only discovery results do not establish contracts or semantic correctness.\n")
+              out.write("\nClick JSON SHA-256: "+results["click"]["sha256"]+".\n")
+          PY
+          test -z "$(git -C heldout/click status --porcelain)"
+          test -z "$(git -C heldout/itsdangerous status --porcelain)"
+          test -z "$(git -C "$RUNNER_TEMP/h11-source" status --porcelain)"

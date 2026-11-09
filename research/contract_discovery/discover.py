@@ -168,12 +168,16 @@ def class_families(a: list[dict[str, Any]],
     return sorted(found, key=lambda p: (p["stem"], p["left"], p["right"]))
 
 
-def discover(root: Path, package: str, test_roots: list[str] | None = None) -> dict[str, Any]:
+def discover(root: Path, package: str, test_roots: list[str] | None = None,
+             source_dir: str = ".") -> dict[str, Any]:
     root = root.resolve()
-    package_dir = root / package.replace(".", "/")
+    source_root = (root / source_dir).resolve()
+    if not source_root.is_relative_to(root):
+        raise ValueError("Source directory must be inside repository")
+    package_dir = source_root / package.replace(".", "/")
     if not package_dir.is_dir():
         raise ValueError(f"Expected package directory: {package_dir}")
-    sources = {module_name(p, root): p for p in sorted(package_dir.rglob("*.py"))
+    sources = {module_name(p, source_root): p for p in sorted(package_dir.rglob("*.py"))
                if "tests" not in p.relative_to(package_dir).parts}
     if package not in sources:
         raise ValueError(f"Missing package __init__.py: {package_dir}")
@@ -251,7 +255,7 @@ def discover(root: Path, package: str, test_roots: list[str] | None = None) -> d
     for module in sources:
         details[module]["runtime_closure"] = sorted(closures[module])
     return {
-        "schema_version": 1, "package": package,
+        "schema_version": 1, "package": package, "source_dir": source_root.relative_to(root).as_posix(),
         "production_modules": {m: details[m] for m in sorted(sources)},
         "runtime_import_cycles": cycles(graph),
         "independent_sibling_candidates": candidates,
@@ -272,9 +276,11 @@ def main() -> None:
     parser.add_argument("--package", required=True)
     parser.add_argument("--tests", action="append", default=None,
                         help="Relative test directory (repeatable)")
+    parser.add_argument("--source-dir", default=".",
+                        help="Package source directory relative to repository (e.g. src)")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
-    result = discover(args.repository, args.package, args.tests)
+    result = discover(args.repository, args.package, args.tests, args.source_dir)
     output = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if args.output:
         args.output.write_text(output)

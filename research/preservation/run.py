@@ -67,7 +67,11 @@ def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--source", type=Path, required=True)
     p.add_argument("--work", type=Path, required=True)
+    p.add_argument("--prior-artifacts", type=Path)
+    p.add_argument("--trusted-run", type=Path)
     args = p.parse_args()
+    if bool(args.prior_artifacts) != bool(args.trusted_run):
+        raise ValueError("prior evidence and authenticated GitHub metadata must be supplied together")
     source = args.source.resolve()
     work = args.work.resolve()
     if not work.is_dir() or source == work or source in work.parents:
@@ -96,6 +100,15 @@ def main() -> None:
          baseline_sha, candidate_sha])
     (work / "candidate.patch").write_bytes(patch)
     attest_env = dict(os.environ, PYTHONPATH=str(original))
+    if args.prior_artifacts is not None and args.trusted_run is not None:
+        run(sys.executable,
+            str(original / "research/preservation/prior.py"),
+            "--source", str(original),
+            "--prior", str(args.prior_artifacts.resolve()),
+            "--trusted-run", str(args.trusted_run.resolve()),
+            "--certificate", str(work / "preservation.json"),
+            "--output", str(work / "prior-reference.json"),
+            cwd=original, env=attest_env)
     evidence_command = [
         sys.executable, str(original / "research/preservation/attest.py"),
         "--work", str(work),
@@ -142,6 +155,7 @@ def main() -> None:
         "forged_evidence_refused": True,
         "altered_in_toto_status_refused": True,
         "in_toto_statement_verified": True,
+        "prior_in_toto_evidence_linked": args.prior_artifacts is not None,
     }, indent=2, sort_keys=True))
 
 

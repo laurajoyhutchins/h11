@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import subprocess
 from typing import Any
+import xml.etree.ElementTree as ET
 
 import manifest
 import run as producer
@@ -141,7 +142,8 @@ def consume(repo: Path, prior: Path, trusted_run: dict,
         if dirty:
             return {"decision": "UNKNOWN", "reasons": ["DIRTY_OR_UNTRACKED_EXECUTION_INPUTS"]}
         result = manifest.compare(repo, deps, current_commit, environment)
-    except (ValueError, KeyError, OSError, TypeError, subprocess.CalledProcessError) as exc:
+    except (ValueError, KeyError, OSError, TypeError, AttributeError,
+            ET.ParseError, subprocess.CalledProcessError) as exc:
         return {"decision": "UNKNOWN", "reasons": ["EVIDENCE_UNVERIFIED"],
                 "detail": str(exc)}
     return {**result, "baseline_commit": deps["source_commit"],
@@ -163,7 +165,7 @@ def main() -> None:
         meta = loaded(args.trusted_run)
         result = consume(args.repository.resolve(), args.prior_artifacts.resolve(),
                          meta, args.target_commit, manifest.environment())
-    except (ValueError, OSError, TypeError) as exc:
+    except (ValueError, OSError, TypeError, AttributeError, ET.ParseError) as exc:
         result = {"decision": "UNKNOWN", "reasons": ["INVALID_INPUT"], "detail": str(exc)}
     args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
     print(json.dumps(result, sort_keys=True))

@@ -77,16 +77,18 @@ def certificate(data: dict, work: Path) -> dict:
             },
             {
                 "id": "http1.chunked.reader",
-                "status": "PREVIOUS_FINITE_EVIDENCE_RETAINED",
+                "status": "CONDITIONAL_FINITE_READER_CLAIM_CARRIED",
                 "original_run": prior["verified_run_id"],
-                "rule": "read-only source dependencies unchanged inside prior manifest",
+                "rule": ("prior evidence is valid at baseline; candidate differs solely in "
+                         "writer method body; reader noninterference is a frame assumption, "
+                         "not established by the prior whole-package dependency manifest"),
                 "fresh_candidate_reader_executions": 0,
             },
             {
                 "id": "http1.chunked.composition",
                 "status": "PRIOR_FINITE_CASES_CARRIED_BY_UNIVERSAL_WRITER_CONGRUENCE",
                 "original_run": prior["verified_run_id"],
-                "original_cases_preserved": 24,
+                "original_cases_preserved_conditionally": 24,
                 "rule": (
                     "unchanged reader + equal writer callback traces "
                     "for all byte payload sequences implies preservation of "
@@ -98,7 +100,8 @@ def certificate(data: dict, work: Path) -> dict:
         "trusted_assumptions": [
             "Standard nonnegative CPython integer bitwise and %x formatting semantics",
             "bytes input and nonthrowing ordered callback",
-            "matching Python execution environment and unchanged reader dependencies",
+            "matching Python execution environment; unchanged reader implementation; "
+            "no reader reflection on writer method identity or import-time effects",
             "prior unsigned Test Result authenticated via GitHub Actions run metadata",
         ],
         "limits": (

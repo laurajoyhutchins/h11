@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import sys
+import shutil
 from pathlib import Path
 
 # Load the research ranking module by path without importing it as "select",
@@ -66,6 +67,14 @@ def treatments(discovery: dict, budget: int = 3) -> list[dict]:
     return items
 
 
+def run_clean_pytest(repo: Path, target: str, env: dict, timeout: int) -> dict:
+    """Avoid CPython timestamp-size bytecode reuse between rapid source edits."""
+    for directory in sorted(repo.rglob("__pycache__"), key=lambda p: len(p.parts), reverse=True):
+        if directory.is_dir():
+            shutil.rmtree(directory)
+    return pytest_result(repo, target, env, timeout)
+
+
 def run(repo: Path, discovery: dict, expected_commit: str,
         budget: int = 3, faults_per_selection: int = 3,
         timeout: int = 35) -> dict:
@@ -81,7 +90,9 @@ def run(repo: Path, discovery: dict, expected_commit: str,
     env = os.environ.copy()
     env["PYTHONPATH"] = str(repo)
     env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
-    test_baseline = pytest_result(repo, "h11/tests", env, timeout)
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    env["PYTHONHASHSEED"] = "0"
+    test_baseline = run_clean_pytest(repo, "h11/tests", env, timeout)
     if test_baseline["verdict"] != "PASS":
         raise RuntimeError("Original source has failing tests: " + repr(test_baseline))
     arms = {
@@ -108,7 +119,7 @@ def run(repo: Path, discovery: dict, expected_commit: str,
                 assert file.read_bytes() == original
                 try:
                     file.write_bytes(mutation["modified"])
-                    observation = pytest_result(repo, "h11/tests", env, timeout)
+                    observation = run_clean_pytest(repo, "h11/tests", env, timeout)
                 finally:
                     file.write_bytes(original)
                 if file.read_bytes() != original:
@@ -124,6 +135,14 @@ def run(repo: Path, discovery: dict, expected_commit: str,
                     "original_tests": observation
                 })
                 print(arm, module, mutation["id"], kind, flush=True)
+    # The overlapping arms must agree on the exact same source mutation.
+    observed: dict[tuple[str, str], set[str]] = {}
+    for samples in trials.values():
+        for item in samples:
+            observed.setdefault((item["module"], item["mutant_id"]), set()).add(item["classification"])
+    inconsistent = sorted((k, sorted(v)) for k, v in observed.items() if len(v) > 1)
+    if inconsistent:
+        raise RuntimeError("Identical mutants produced inconsistent verdicts: " + repr(inconsistent))
     if git(repo, "status", "--porcelain"):
         raise RuntimeError("Dirty source worktree after trials")
     for module, original in original_bytes.items():
@@ -154,6 +173,7 @@ def run(repo: Path, discovery: dict, expected_commit: str,
         "source_commit": expected_commit,
         "source_tree": EXPECTED_TREE,
         "baseline_pytest": test_baseline,
+        "cross_arm_identical_mutant_consistency": "PASS",
         "parameters": {
             "selections_per_arm": budget,
             "mutants_per_selection": faults_per_selection,

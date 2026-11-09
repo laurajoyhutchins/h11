@@ -125,7 +125,7 @@ def verify_rows(old: dict, new: dict, cases: list[dict]) -> list[dict]:
     return checked
 
 
-def make_certificate(repo: Path, baseline: Path, candidate: Path,
+def make_certificate(baseline: Path, candidate: Path,
                      old: dict, new: dict) -> dict:
     cases = corpus()
     orig_commit = git(baseline, "rev-parse", "HEAD")

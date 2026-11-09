@@ -1,0 +1,54 @@
+name: Verify source-only contract discovery
+
+on:
+  push:
+    branches: [research/synthetic-history-evidence]
+    paths:
+      - .github/workflows/source-contract-discovery.yml
+      - research/contract_discovery/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Verify discoverer on an independent Python fixture
+        run: python research/contract_discovery/test_discover.py -v
+      - name: Discover from pinned source snapshot (no manual ledger input)
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_ref=62c5068c971579d61fa1b55373390e12f25fd856
+          git worktree add --detach "$RUNNER_TEMP/upstream_h11" "$source_ref"
+          python research/contract_discovery/discover.py \
+            "$RUNNER_TEMP/upstream_h11" \
+            --package h11 \
+            --output "$RUNNER_TEMP/h11-discovery.json"
+          python research/contract_discovery/evaluate_h11.py \
+            "$RUNNER_TEMP/h11-discovery.json" \
+            | tee "$RUNNER_TEMP/discovery-summary.json"
+          python - <<'PY'
+          import hashlib, json, os, pathlib
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])
+          raw=(root/"h11-discovery.json").read_bytes()
+          summary=json.loads((root/"discovery-summary.json").read_text())
+          print("Discovery JSON SHA-256:",hashlib.sha256(raw).hexdigest())
+          with open(os.environ["GITHUB_STEP_SUMMARY"],"a") as output:
+              output.write("## Source-only contract discovery\n\n")
+              output.write(f"PASS: {summary['modules']} modules, {summary['test_files']} original test modules.\n\n")
+              output.write("Recovered independent siblings: h11._readers and h11._writers, joining at h11._connection.\n\n")
+              output.write("Matched class families: " + ", ".join(summary["paired_class_families"]) + ".\n\n")
+              output.write("Identified extra test dependency: test_headers imports _events although _headers has no runtime _events import.\n\n")
+              output.write("Raw JSON SHA-256: " + hashlib.sha256(raw).hexdigest() + ".\n")
+              output.write("\nNot behavioral verification; candidate boundaries require independent oracles.\n")
+          PY

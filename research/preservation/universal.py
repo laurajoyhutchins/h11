@@ -16,6 +16,7 @@ from attest import verify as verify_finite
 from check import strict_json
 from formal_bridge import proof_result, verify_bridge, PROOF
 from prior import bind
+from reader_frame import source_frame, verify_observations, reexecute_baseline
 
 STATEMENT = "https://in-toto.io/Statement/v1"
 RESULT = "https://in-toto.io/attestation/test-result/v0.1"
@@ -41,7 +42,19 @@ def load_inputs(root: Path, baseline: Path, candidate: Path, work: Path,
     if (proved["proof_git_commit"] !=
         bridged["source_restriction"]["baseline_commit"]):
         raise ValueError("proof did not belong to original Git commit")
-    return {"finite": finite, "prior": old, "proof": proved, "bridge": bridged}
+    frame_source = source_frame(baseline, candidate)
+    sealed = strict_json(work / "sealed-reader-observations.json")
+    reexecute_baseline(
+        baseline,
+        work / "baseline-observations.json",
+        work / "prior-reference.json",
+        sealed,
+    )
+    fresh_frame = verify_observations(frame_source, sealed, old)
+    if fresh_frame != strict_json(work / "reader-frame.json"):
+        raise ValueError("reader frame certificate differs from independently rechecked source")
+    return {"finite": finite, "prior": old, "proof": proved,
+            "bridge": bridged, "reader_frame": fresh_frame}
 
 
 def certificate(data: dict, work: Path) -> dict:
@@ -49,6 +62,7 @@ def certificate(data: dict, work: Path) -> dict:
     prior = data["prior"]
     proved = data["proof"]
     bridged = data["bridge"]
+    frame = data["reader_frame"]
     original = finite["source"]["baseline_commit"]
     candidate = finite["source"]["candidate_commit"]
     return {
@@ -59,10 +73,13 @@ def certificate(data: dict, work: Path) -> dict:
         "candidate_tree": finite["source"]["candidate_tree"],
         "formal_proof": proved,
         "exact_python_ast_bridge": bridged,
+        "sealed_reader_noninterference": frame,
         "evidence": {
             "finite_certificate_sha256": hash_file(work / "preservation.json"),
             "finite_in_toto_sha256": hash_file(work / "preservation.intoto.json"),
             "prior_reference_sha256": hash_file(work / "prior-reference.json"),
+            "reader_frame_sha256": hash_file(work / "reader-frame.json"),
+            "sealed_baseline_observations_sha256": hash_file(work / "sealed-reader-observations.json"),
         },
         "claims": [
             {
@@ -77,22 +94,26 @@ def certificate(data: dict, work: Path) -> dict:
             },
             {
                 "id": "http1.chunked.reader",
-                "status": "CONDITIONAL_FINITE_READER_CLAIM_CARRIED",
+                "status": "SEALED_READER_FRAME_CHECKED_WITHIN_FIXED_CONTEXT",
                 "original_run": prior["verified_run_id"],
-                "rule": ("prior evidence is valid at baseline; candidate differs solely in "
-                         "writer method body; reader noninterference is a frame assumption, "
-                         "not established by the prior whole-package dependency manifest"),
+                "rule": (
+                    "seven reader modules are identical Git blobs with a checked "
+                    "static import closure excluding the writer; a fresh inert "
+                    "package loader replays 24 original reader observations at "
+                    "baseline and verifies writer is not imported. This proves "
+                    "a restricted reader-only frame, not normal h11 import behavior."
+                ),
                 "fresh_candidate_reader_executions": 0,
             },
             {
                 "id": "http1.chunked.composition",
-                "status": "PRIOR_FINITE_CASES_CARRIED_BY_UNIVERSAL_WRITER_CONGRUENCE",
+                "status": "FINITE_COMPOSITION_CARRIED_IN_SEALED_READER_CONTEXT",
                 "original_run": prior["verified_run_id"],
                 "original_cases_preserved_conditionally": 24,
                 "rule": (
                     "unchanged reader + equal writer callback traces "
-                    "for all byte payload sequences implies preservation of "
-                    "the 24 previously observed composition cases"
+                    "for all byte payload sequences, plus a sealed reader-only "
+                    "import frame, supports the 24 replayed composition inputs"
                 ),
                 "fresh_candidate_reader_executions": 0,
             },
@@ -112,8 +133,8 @@ def certificate(data: dict, work: Path) -> dict:
             "Data.data is genuine bytes, not an h11-supported sendfile-style proxy",
             "The write callback observes only byte argument values/order, does not "
             "throw, mutate payload, inspect frames, or distinguish resource usage",
-            "Reader behavior is independent of the modified writer method body "
-            "and import/cache/introspection effects; this frame condition is unproved",
+            "Sealed reader context excludes normal h11 package init, custom import "
+            "hooks, monkeypatching and arbitrary reflection; ordinary context not proved",
             "Runtime environment and prior finite reader inputs match those recorded",
             "Prior unsigned Test Result authenticated via GitHub Actions metadata",
         ],
@@ -137,6 +158,9 @@ def statement(cert: dict, work: Path) -> dict:
         "prior-in-toto-and-JUnit-authenticated-and-verified",
         "prior-case-lineage-matches",
         "finite-certificate-in-toto-reverified",
+        "seven-reader-source-modules-closed-and-unchanged",
+        "sealed-reader-baseline-replayed-24-cases",
+        "writer-not-imported-by-sealed-reader",
     ]
     configuration = [
         {"name": "source-proof",
@@ -144,7 +168,9 @@ def statement(cert: dict, work: Path) -> dict:
         *[
             {"name": path, "digest": {"sha256": hash_file(work / path)}}
             for path in ("preservation.json", "preservation.intoto.json",
-                         "prior-reference.json", "universal-preservation.json")
+                         "prior-reference.json", "reader-frame.json",
+                         "sealed-reader-observations.json",
+                         "universal-preservation.json")
         ],
     ]
     return {

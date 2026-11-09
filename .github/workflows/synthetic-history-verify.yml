@@ -24,11 +24,18 @@ jobs:
           python-version: '3.13'
       - name: Install only upstream pytest dependency
         run: python -m pip install pytest==9.0.2
+      - name: Assert exact source-tree identity
+        run: |
+          expected=$(git rev-parse '62c5068c971579d61fa1b55373390e12f25fd856^{tree}')
+          actual=$(git rev-parse 'e8c7aeb18731b31cc68d0e658daab6d07773c85e^{tree}')
+          echo "Upstream tree: $expected"
+          echo "v2 final tree: $actual"
+          test "$expected" = "$actual"
       - name: Test exact synthetic commits
         shell: bash
         run: |
           set -uo pipefail
-          printf '## Upstream pytest on synthetic-history checkpoints\n\n' >> "$GITHUB_STEP_SUMMARY"
+          printf '## Upstream pytest on synthetic-history v2 checkpoints\n\n' >> "$GITHUB_STEP_SUMMARY"
           printf '| Commit | Test result | Summary |\n| --- | --- | --- |\n' >> "$GITHUB_STEP_SUMMARY"
           failures=0
           printf '\nEarlier checkpoints lack h11/__init__.py. A temporary empty import shim is used only during pytest and removed afterward; no source is committed.\n\n' >> "$GITHUB_STEP_SUMMARY"
@@ -69,22 +76,23 @@ jobs:
             echo "::endgroup::"
           done <<'CHECKPOINTS'
           foundation|02fa04eab35e8394ea51bceb8b96e6c23da7a953
-          headers|e482722939a4ad19bea96be0fe4a948751d66380
-          events|b1aa461b7d7c45bf578bc18c4c1b0da390ccca4b
-          state|7a384f41e01541ea1cdaa795d90746407bc253a1
-          receivebuffer|db1fff06d47fd43ace98c387fded033bd813d77a
-          readers|15507e1ac95264e34e7a8d600538c83676b5c1d5
-          writers-independent|0b9365e45d5b9bc21aede22f8b146edd9deda871
-          merged-codecs|63df258e204f24fce04ff31de195b59e6d27357e
-          connection|ec634e84d3efb2bb58cc5bae5887abaed2bdba79
-          distribution|7ccd0a7b4ed9243a4d1d5771127feb7ed9899177
-          docs-independent|4cd0b02c8169863a42bb54dd22dfabaf94e18f27
-          merged-documentation|701bb007a5e92b53a3e17b9c4a60a636394ec69b
-          final|0a774d3953a5ab4f63fcb31ba77be0e54d71189d
+          headers|48999ac59198a379decf9f2bd03292c391edc381
+          events|f28133dcede0bc3d586e082106e7cbf8a0ffee03
+          state|937ace605bdafee81de7c79b3dee9cf0eadb74bf
+          receivebuffer|0ad007be3e2df4c2ea720d35cae0f29ee9c2c2f1
+          readers|7fa2fc81be4a0ac1e656273351f2b8bd8c56032b
+          writers-independent|554d16354a927e2f9064c8dfadcf7a8ffaceaf8b
+          merged-codecs|49d8d15653b088f80d4ceddd0260932c53ce43cf
+          connection|0e1a9e732b8e887d1fce59e68906548d6a6f5ec5
+          distribution|0d6df2989acb43df7c62c592af960c3312d10980
+          docs-independent|e54a10d50714d7a70eaf071f3870a9807c0f286c
+          merged-documentation|64a00f7f4eac381512d6e26b7034aa1d7578010a
+          final|e8c7aeb18731b31cc68d0e658daab6d07773c85e
           CHECKPOINTS
           if [[ "$failures" -gt 0 ]]; then
             echo "Upstream pytest did not pass at $failures checkpoint(s). See the per-checkpoint results, including expected incompleteness at earlier stages."
             # Mark this workflow successful if the experiment completed and recorded all results.
             # Test failures are data, not infrastructure failures.
           fi
-          echo "Completed 13 checkpoint attempts; $failures did not pass."
+          echo "Completed 13 v2 checkpoint attempts; $failures did not pass."
+          if [[ "$failures" != 0 ]]; then exit 1; fi

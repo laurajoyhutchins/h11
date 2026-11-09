@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "trial": "second unseen repository transfer for contract discovery v2",
+  "external_repository": "pallets/click",
+  "source_revision": "8abb77a8432e03ed14a95f972b44f905279415a7",
+  "source_branch_at_selection": "main",
+  "locked_before_source_inspection": true,
+  "aim": "Evaluate generic candidate discovery on previously unexamined code, without deriving semantic specifications from names.",
+  "frozen_rules": [
+    {
+      "kind": "test_exercised_module_closure",
+      "rule": "Build production import graph. For every concrete production submodule directly imported by an original test module or its statically imported test helpers, record the module's runtime import closure and list the tests importing it. Tests importing only a package facade are labelled facade evidence and are not attributed to private implementations without static evidence.",
+      "omit": "Do not convert import evidence to a behavioral guarantee or a verified contract."
+    },
+    {
+      "kind": "extension_boundary",
+      "rule": "Parse class declarations and bases. Attribute each base to a concrete class defined within the same Python package only when the base name resolves statically by local definition or explicit from-import. Record cross-module and in-module inheritance and respective import closures; unresolved or dynamically constructed bases are ignored with uncertainty explicitly recorded.",
+      "omit": "Do not infer that a subclass strengthens any contract."
+    },
+    {
+      "kind": "sibling_pair",
+      "rule": "Keep v1 sibling candidate method unchanged and report its result as a separate field, even when zero."
+    }
+  ],
+  "execution_protocol": "Pin source Git commit and evaluate discovery from its Git checkout using generic src-layout support. Run identical generic regression on h11 and ItsDangerous. Never modify target repository or source blobs.",
+  "acceptance": {
+    "run_without_repo_specific_config": [
+      "repository path",
+      "package name",
+      "source root",
+      "test root"
+    ],
+    "stable_deterministic_json": true,
+    "static_tests_without_importing_target": true,
+    "return_all_three_candidate_families_even_when_empty": true,
+    "verify_source_sha_before_test_execution": true,
+    "report_unknown_or_unresolved_inheritance": true,
+    "never_mark_structural_evidence_as_semantically_verified": true
+  },
+  "evaluation_observables": [
+    "implementation modules",
+    "test modules",
+    "new test-exercised closure count",
+    "direct inheritance edges",
+    "sibling pair count",
+    "unresolved bases",
+    "test dependencies",
+    "which candidates have independent oracles (none by default)"
+  ],
+  "success_definition": "Independent third-repository run succeeds with deterministic source-backed evidence and explicit non-verification verdict. Utility and nonzero candidate yield are observations, not adjusted post hoc.",
+  "independence_statement": "No reading of Click implementation or test files before preregistration. Prior h11 and ItsDangerous investigations are development inputs; Click is the new holdout."
+}

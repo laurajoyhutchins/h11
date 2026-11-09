@@ -3,7 +3,9 @@ name: Verify contract-generated Git history
 on:
   push:
     branches: [research/synthetic-history-evidence]
-    paths: [.github/workflows/contract-generated-verify.yml]
+    paths:
+      - .github/workflows/contract-generated-verify.yml
+      - research/contract_history/**
   workflow_dispatch:
 
 permissions:

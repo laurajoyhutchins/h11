@@ -5,7 +5,9 @@ on:
     branches: [research/synthetic-history-evidence]
     paths:
       - .github/workflows/source-contract-discovery.yml
-      - research/contract_discovery/**
+      - research/contract_discovery/discover.py
+      - research/contract_discovery/test_discover.py
+      - research/contract_discovery/evaluate_h11.py
   workflow_dispatch:
 
 permissions:

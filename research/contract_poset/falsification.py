@@ -105,8 +105,15 @@ def resolve_relative(module: str, is_package: bool, level: int, target: str | No
     return ".".join(parts)
 
 
-def static_closure(checkout: Path, source: str, package: str, focus: str) -> list[str]:
-    """Explicit AST imports only: intentionally does not add implicit package init."""
+def static_closure(checkout: Path, source: str, package: str, focus: str,
+                   include_package_initializers: bool = False) -> list[str]:
+    """Static import closure, optionally including Python's implicit init edges.
+
+    Default False preserves the original preregistered import-only control.
+    With True, importing any dotted module also requires executing each
+    existing parent package's __init__.py. The added initializer's own AST
+    imports are traversed normally; no dynamic runtime completeness claimed.
+    """
     root = checkout / source / package
     if not root.is_dir():
         raise ValueError("Pinned source package missing: " + package)
@@ -135,6 +142,16 @@ def static_closure(checkout: Path, source: str, package: str, focus: str) -> lis
                 candidates.append(base)
                 candidates.extend(f"{base}.{a.name}" for a in n.names if base)
             deps.update(c for c in candidates if c in paths and c != name)
+        if include_package_initializers:
+            # A Python import of a.b.c executes a/__init__.py and
+            # a/b/__init__.py before a/b/c.py. These are semantic edges
+            # supplied by the interpreter, not observed by a test.
+            parts = name.split(".")
+            for depth in range(1, len(parts)):
+                parent_package = ".".join(parts[:depth])
+                init = paths.get(parent_package)
+                if init is not None and init.name == "__init__.py":
+                    deps.add(parent_package)
         graph[name] = deps
     closure = set()
     pending = [focus]
@@ -200,7 +217,8 @@ def evaluate_revision(repo: Path, package: str, label: str, rev: str, baseline: 
     records.append(row)
 
 
-def evaluate_one(target: dict, root: Path, history_count: int) -> dict:
+def evaluate_one(target: dict, root: Path, history_count: int,
+                 include_package_initializers: bool = False) -> dict:
     repo_name = target["repository"]
     package = target["package"]
     head = target["commit"]
@@ -211,9 +229,11 @@ def evaluate_one(target: dict, root: Path, history_count: int) -> dict:
         raise ValueError("Pinned revision unavailable: " + repo_name)
     git(checkout, "checkout", "-q", "--detach", "-f", head)
     start = time.perf_counter()
-    paths = static_closure(checkout, target["source"], package, target["focus"])
-    if f"{target['source']}/{package}/__init__.py" in paths:
-        raise ValueError("Adversarial initializer already tracked; test not targeted")
+    paths = static_closure(checkout, target["source"], package, target["focus"],
+                           include_package_initializers=include_package_initializers)
+    init_path = f"{target['source']}/{package}/__init__.py"
+    if (init_path in paths) != include_package_initializers:
+        raise ValueError("Initializers must be included only in the corrected arm")
     base = blobs(checkout, head, f"{target['source']}/{package}")
     if any(path not in base for path in paths):
         raise ValueError("Pinned source closure missing a Git object")
@@ -232,8 +252,9 @@ def evaluate_one(target: dict, root: Path, history_count: int) -> dict:
         evaluate_revision(checkout, package, f"historical-{number:03}", rev, base,
                           f"{target['source']}/{package}", paths, expected, records, totals)
 
-    # A new, real but never-pushed Git commit changes only the package
-    # initializer. The naive import-only closure doesn't record that file.
+    # An identical local-only initializer mutation is tested in both arms.
+    # The original import-only predictor misses it; the corrected one must
+    # invalidate the old evidence by tracking the initializer's Git blob.
     git(checkout, "checkout", "-q", "--detach", "-f", head)
     git(checkout, "config", "user.email", "ci-experiment@example.invalid")
     git(checkout, "config", "user.name", "CI Experiment")
@@ -246,15 +267,19 @@ def evaluate_one(target: dict, root: Path, history_count: int) -> dict:
     adversarial = git(checkout, "rev-parse", "HEAD")
     evaluate_revision(checkout, package, "adversarial-initializer", adversarial,
                       base, f"{target['source']}/{package}", paths, expected, records, totals)
-    if records[-1]["verdict"] != "REUSE":
-        raise ValueError("Preregistered adversarial initializer no longer avoids static closure")
+    expected_decision = "REVERIFY" if include_package_initializers else "REUSE"
+    if records[-1]["verdict"] != expected_decision:
+        raise ValueError("Initializer mutation failed the expected mode-specific decision")
     control = totals["full_oracle_seconds"]
     indexed = totals["selected_oracle_seconds"] + totals["index_seconds"]
     totals["counterfactual_savings_fraction"] = (
         round(1 - indexed / control, 6) if control > 0 else None
     )
     return {
-        "repository": repo_name, "source_commit": head,
+        "repository": repo_name,
+        "dependency_model": ("static_imports_plus_implicit_package_initializers"
+                             if include_package_initializers else "static_imports_only"),
+        "source_commit": head,
         "source_tree": git(checkout, "rev-parse", head + "^{tree}"),
         "source_closure_paths": paths,
         "source_closure_oids": {p: base[p] for p in paths},
@@ -272,6 +297,8 @@ def main() -> None:
     p.add_argument("--protocol", type=Path, required=True)
     p.add_argument("--checkout-root", type=Path, required=True)
     p.add_argument("--output", type=Path, required=True)
+    p.add_argument("--include-package-initializers", action="store_true",
+                   help="Corrected rule: include parent Python package initializers (default is frozen control)")
     args = p.parse_args()
     protocol = json.loads(args.protocol.read_text())
     if protocol["schema_version"] != 1:
@@ -279,7 +306,8 @@ def main() -> None:
     args.checkout_root.mkdir(parents=True, exist_ok=True)
     results = []
     for target in protocol["repos"]:
-        case = evaluate_one(target, args.checkout_root, target["history_first_parent_revisions"])
+        case = evaluate_one(target, args.checkout_root, target["history_first_parent_revisions"],
+                            include_package_initializers=args.include_package_initializers)
         totals = case["totals"]
         adversarial = case["observations"][-1]
         print("CASE", target["repository"],
@@ -306,6 +334,8 @@ def main() -> None:
     total_historical = sum(c["history_requested"] for c in results)
     result = {
         "schema_version": 1,
+        "dependency_model": ("static_imports_plus_implicit_package_initializers"
+                             if args.include_package_initializers else "static_imports_only"),
         "protocol_sha256": hashlib.sha256(args.protocol.read_bytes()).hexdigest(),
         "python": platform.python_version(), "assessment_scope": "observational; not normative regression",
         "total_historical_revisions_requested": total_historical,
@@ -325,7 +355,9 @@ def main() -> None:
         ),
         "per_repository": results,
         "scope_limitations": [
-            "Static import-only AST predictor omitted implicit package initialization.",
+            ("Corrected AST predictor includes Python implicit parent package initialization edges."
+             if args.include_package_initializers else
+             "Static import-only AST predictor omitted implicit package initialization."),
             "Historical revisions may intentionally alter behavior; this is not a regression label.",
             "Measurements are counterfactual estimates from recorded full-oracle subprocess times.",
             "The index does not verify plugin registration, import side effects, environment changes or hidden dynamic dependencies.",

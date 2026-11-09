@@ -2,10 +2,13 @@
 from __future__ import annotations
 
 import copy
+from pathlib import Path
+import subprocess
+import tempfile
 import unittest
 
 from reader_frame import (
-    EXPECTED_CLOSURE, imports, verify_observations,
+    EXPECTED_CLOSURE, imports, verify_observations, source_frame,
 )
 
 
@@ -33,6 +36,65 @@ class ReaderFrameTests(unittest.TestCase):
                 for step in (1, 2, 3, 7, 64, 1024)
             ],
         }
+
+    def _git(self, repo: Path, *args: str) -> str:
+        return subprocess.check_output(
+            ["git", "-C", str(repo), *args], text=True).strip()
+
+    def _real_git_pair(self, reader_source: str) -> tuple[Path, Path]:
+        scratch = tempfile.TemporaryDirectory(prefix="h11-frame-git-")
+        self.addCleanup(scratch.cleanup)
+        origin = Path(scratch.name) / "origin"
+        origin.mkdir()
+        self._git(origin, "init", "-q")
+        self._git(origin, "config", "user.name", "Frame Test")
+        self._git(origin, "config", "user.email", "frame@example.invalid")
+        folder = origin / "h11"
+        folder.mkdir()
+        (folder / "_writers.py").write_text(
+            "class ChunkedWriter:\n"
+            "    def send_data(self, data, write):\n"
+            "        write(b'old')\n"
+        )
+        for name in EXPECTED_CLOSURE:
+            content = reader_source if name == "_readers" else "# pinned\n"
+            (folder / f"{name}.py").write_text(content)
+        self._git(origin, "add", ".")
+        self._git(origin, "commit", "-qm", "reader baseline")
+        baseline_sha = self._git(origin, "rev-parse", "HEAD")
+        (folder / "_writers.py").write_text(
+            "class ChunkedWriter:\n"
+            "    def send_data(self, data, write):\n"
+            "        write(b'new')\n"
+        )
+        self._git(origin, "add", ".")
+        self._git(origin, "commit", "-qm", "writer-only candidate")
+        baseline = Path(scratch.name) / "baseline"
+        candidate = Path(scratch.name) / "candidate"
+        subprocess.run(["git", "clone", "-q", str(origin), str(baseline)], check=True)
+        subprocess.run(["git", "clone", "-q", str(origin), str(candidate)], check=True)
+        self._git(baseline, "checkout", "-q", "--detach", baseline_sha)
+        return baseline, candidate
+
+    def test_actual_git_writer_change_preserves_closed_reader_source(self):
+        reader = "".join(
+            f"from .{name} import token\n"
+            for name in sorted(EXPECTED_CLOSURE - {"_readers"})
+        )
+        baseline, candidate = self._real_git_pair(reader)
+        frame = source_frame(baseline, candidate)
+        self.assertTrue(frame["reader_source_unchanged"])
+        self.assertEqual(len(frame["declared_modules"]), 7)
+        self.assertTrue(frame["writer_absent_from_checked_direct_import_closure"])
+
+    def test_actual_git_pair_with_reader_to_writer_import_is_rejected(self):
+        reader = "from ._writers import ChunkedWriter\n" + "".join(
+            f"from .{name} import token\n"
+            for name in sorted(EXPECTED_CLOSURE - {"_readers"})
+        )
+        baseline, candidate = self._real_git_pair(reader)
+        with self.assertRaisesRegex(ValueError, "imports the modified writer"):
+            source_frame(baseline, candidate)
 
     def test_known_reader_imports_are_admitted(self):
         src = b"from ._events import Data\nfrom ._util import validate\n"

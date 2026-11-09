@@ -90,8 +90,21 @@ theorem messageTrace_eq_for_all_inputs
     exact chunkTrace_eq_for_all_payloads data
   simp [candidateMessage, baselineMessage, h]
 
+-- For any single shared deterministic reader (or other function of a wire
+-- byte stream), equal writer traces yield equal reader results. This theorem
+-- is parametric in the reader: it does NOT prove the Python import frame or
+-- assert that two independently loaded reader functions are equal.
+theorem sharedReaderCongruence {Output : Type}
+    (reader : List UInt8 → Output)
+    (parts : List (List UInt8)) (ending : List (List UInt8)) :
+    reader ((candidateMessage parts ending).flatten) =
+    reader ((baselineMessage parts ending).flatten) := by
+  rw [messageTrace_eq_for_all_inputs]
+
 end HexPreservation
 
 #print axioms HexPreservation.bitwiseDigits_eq_toDigits
 #print axioms HexPreservation.chunkTrace_eq_for_all_payloads
 #print axioms HexPreservation.messageTrace_eq_for_all_inputs
+
+#print axioms HexPreservation.sharedReaderCongruence

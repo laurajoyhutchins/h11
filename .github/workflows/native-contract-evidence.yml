@@ -1,0 +1,53 @@
+name: Native contract evidence in ordinary CI (pilot)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/native-contract-ci-evidence]
+    paths:
+      - .github/workflows/native-contract-evidence.yml
+      - research/ci_evidence/**
+      - research/contract_poset/test_initializer_closure.py
+      - research/contract_poset/falsification.py
+      - h11/**
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  verify-and-report:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install existing test runner
+        run: python -m pip install 'pytest>=8,<10'
+      - name: Check test-result export failure semantics
+        run: PYTHONPATH=research/ci_evidence python -m unittest -v test_exporter
+      - name: Run real h11 tests and bind evidence to checked-out commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/ci_evidence/run.py \
+            --expected-commit "$GITHUB_SHA" \
+            --output-dir "$RUNNER_TEMP/native-contract-evidence"
+      - name: Preserve JUnit, unsigned in-toto, claim ledger, and SARIF
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-contract-evidence
+          path: ${{ runner.temp }}/native-contract-evidence/
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Publish findings in GitHub Code Scanning
+        if: success()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: ${{ runner.temp }}/native-contract-evidence/limitations.sarif
+          category: research-native-contract-evidence

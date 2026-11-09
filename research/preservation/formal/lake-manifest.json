@@ -1,0 +1,8 @@
+{
+  "version": "1.3.0",
+  "packagesDir": ".lake/packages",
+  "packages": [],
+  "name": "h11ContractPreservation",
+  "lakeDir": ".lake",
+  "fixedToolchain": false
+}

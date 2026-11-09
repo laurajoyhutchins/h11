@@ -226,6 +226,59 @@ def check_stages(repo: Path, stages: dict, source: dict[str, Any],
     return records
 
 
+def project_existing_refs(repo: Path, refs: list[str], discovery: dict,
+                          source_objects: dict[str, dict[str, str]],
+                          closure: dict[str, set[str]], source_tree: str) -> list[dict]:
+    """Project arbitrary existing Git commit snapshots onto the pinned module basis.
+
+    Added unrelated files are allowed. Changed *source module* blobs are
+    incompatible with this pinned version, not silently treated as absence.
+    """
+    if len(set(refs)) != len(refs):
+        raise ValueError("Snapshot references must be unique")
+    module_paths = {x["path"]: name for name, x in discovery["production_modules"].items()}
+    projected = []
+    for ref in refs:
+        commit = git_commit(repo, ref)
+        objects = git_objects(repo, commit["oid"])
+        missing = sorted(module_paths[path] for path in module_paths if path not in objects)
+        changed = sorted(module_paths[path] for path in module_paths
+                         if path in objects and objects[path] != source_objects[path])
+        if changed:
+            projected.append({
+                "ref": ref, "commit_oid": commit["oid"], "tree_oid": commit["tree"],
+                "parent_commit_oids": commit["parents"], "status": "INCOMPATIBLE_SOURCE_VERSION",
+                "changed_original_modules": changed,
+                "message": "Cannot project changed source module blobs onto pinned module basis",
+            })
+            continue
+        present = set(discovery["production_modules"]) - set(missing)
+        if not is_ideal(present, closure):
+            missing_deps = sorted(set().union(*(closure[x] for x in present)) - present)
+            projected.append({
+                "ref": ref, "commit_oid": commit["oid"], "tree_oid": commit["tree"],
+                "parent_commit_oids": commit["parents"], "status": "NOT_DEPENDENCY_CLOSED",
+                "missing_original_modules": missing,
+                "missing_prerequisites": missing_deps,
+            })
+            continue
+        extra = sorted(set(objects) - set(source_objects))
+        projected.append({
+            "ref": ref, "commit_oid": commit["oid"], "tree_oid": commit["tree"],
+            "parent_commit_oids": commit["parents"], "status": "PINNED_MODULE_IDEAL",
+            "modules": sorted(present),
+            "frontier": frontier(present, closure),
+            "ideal_id": digest(sorted(discovery["production_modules"][m]["blob_sha"] + ":" + m
+                                      for m in present)),
+            "same_tree_as_source": commit["tree"] == source_tree,
+            "additional_paths_beyond_pinned_source": len(extra),
+            "missing_original_modules": missing,
+            "is_complete_original_module_set": len(present) == len(module_paths),
+            "note": "No semantic correctness claim; exact Git source-module blob identity only",
+        })
+    return projected
+
+
 def attach_contracts(contracts: dict, links: dict, verified: dict,
                      module_closure: dict[str, set[str]],
                      stages: list[dict[str, Any]], discovery: dict) -> dict[str, Any]:
@@ -249,6 +302,20 @@ def attach_contracts(contracts: dict, links: dict, verified: dict,
         required_modules = set(link["modules"])
         if not required_modules or not required_modules <= set(module_closure):
             raise ValueError("Contract modules absent from source poset: " + name)
+        source_by_path = {d["path"]: (module, d)
+                          for module, d in discovery["production_modules"].items()}
+        implementation = spec.get("implementation")
+        if implementation is not None:
+            matching = source_by_path.get(implementation)
+            if matching is None or matching[0] not in required_modules:
+                raise ValueError("Contract implementation is not bound to its source module: " + name)
+            if spec.get("blob_sha") != matching[1]["blob_sha"]:
+                raise ValueError("Contract implementation blob SHA differs from pinned source: " + name)
+        expected_paths = set(spec.get("import_closure", []))
+        actual_paths = {discovery["production_modules"][m]["path"]
+                        for module in required_modules for m in module_closure[m]}
+        if expected_paths and expected_paths != actual_paths:
+            raise ValueError("Contract source import closure differs from independently declared specification: " + name)
         stage = by_stage[spec["introduced_at"]]
         if not required_modules <= set(stage["modules"]):
             raise ValueError("Contract introduced before source closure exists: " + name)
@@ -315,7 +382,7 @@ def attach_contracts(contracts: dict, links: dict, verified: dict,
 
 def build(repo: Path, discovery: dict, stage_ledger: dict,
           contracts: dict | None = None, links: dict | None = None,
-          verified: dict | None = None) -> dict:
+          verified: dict | None = None, refs: list[str] | None = None) -> dict:
     repo = repo.resolve()
     graph, closure, structural = module_poset(discovery)
     source_commit = stage_ledger["source_commit"]
@@ -340,6 +407,9 @@ def build(repo: Path, discovery: dict, stage_ledger: dict,
         ],
         "method": "read-only existing Git object inspection + finite structural ideal lattice",
     }
+    if refs:
+        result["existing_git_refs"] = project_existing_refs(
+            repo, refs, discovery, source_objects, closure, source_tree)
     supplied = [contracts is not None, links is not None, verified is not None]
     if any(supplied) and not all(supplied):
         raise ValueError("Provide contracts, explicit links and verified summary together")
@@ -358,6 +428,8 @@ def main() -> None:
     p.add_argument("--contracts", type=Path)
     p.add_argument("--links", type=Path)
     p.add_argument("--verified", type=Path)
+    p.add_argument("--ref", action="append", default=[],
+                   help="Existing Git commit/ref to project onto pinned module ideals (repeatable)")
     p.add_argument("--output", type=Path)
     args = p.parse_args()
     result = build(args.repository,
@@ -365,7 +437,8 @@ def main() -> None:
                    json.loads(args.stages.read_text()),
                    json.loads(args.contracts.read_text()) if args.contracts else None,
                    json.loads(args.links.read_text()) if args.links else None,
-                   json.loads(args.verified.read_text()) if args.verified else None)
+                   json.loads(args.verified.read_text()) if args.verified else None,
+                   args.ref)
     raw = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if args.output:
         args.output.write_text(raw)

@@ -1,0 +1,80 @@
+name: Falsify static import closure verification reuse
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/synthetic-history-evidence]
+    paths:
+      - research/contract_poset/falsification.py
+      - research/contract_poset/falsification_preregistration.json
+      - .github/workflows/falsify-import-reuse.yml
+
+permissions:
+  contents: read
+
+jobs:
+  falsify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Preregistered 210 history and three adversarial comparisons
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/contract_poset/falsification.py \
+            --protocol research/contract_poset/falsification_preregistration.json \
+            --checkout-root "$RUNNER_TEMP/subjects" \
+            --output "$RUNNER_TEMP/falsification-result.json"
+          python - <<'PY'
+          import hashlib,json,os,pathlib
+          p=pathlib.Path(os.environ["RUNNER_TEMP"])/"falsification-result.json"
+          result=json.loads(p.read_text())
+          assert result["total_historical_revisions_requested"] == 210
+          assert result["total_adversarial_revisions"] == 3
+          assert len(result["per_repository"]) == 3
+          for repo in result["per_repository"]:
+              assert repo["history_requested"] == 70
+              assert len(repo["observations"]) == 71
+              assert repo["observations"][-1]["label"] == "adversarial-initializer"
+          print("FALSIFICATION_VERDICT", "FALSIFIED" if result["hypothesis_falsified_by_soundness_counterexample"] else "NOT_FALSIFIED")
+          print("ASSESSABLE",result["assessable_revisions"],"UNASSESSABLE",result["unassessable_revisions"])
+          print("MISSED_OBSERVABLE_CHANGES",result["missed_observable_changes"])
+          print("OBSERVED_MISSES",json.dumps([{"repo":x["repository"],"label":x["label"],"commit":x["commit"]}
+                                            for x in result["misses"]],sort_keys=True))
+          print("COUNTERFACTUAL_TIME_SAVINGS_FRACTION",result["counterfactual_savings_fraction"])
+          print("PER_REPOSITORY",json.dumps([
+              {"repo":c["repository"],"assessable":c["totals"]["assessable"],
+               "misses":c["totals"]["misses"],
+               "savings":c["totals"]["counterfactual_savings_fraction"],
+               "closure":c["source_closure_paths"],
+               "adversarial":c["observations"][-1]}
+              for c in result["per_repository"]],sort_keys=True))
+          sha=hashlib.sha256(p.read_bytes()).hexdigest()
+          print("FULL_FALSIFICATION_JSON_SHA256",sha)
+          with open(os.environ["GITHUB_STEP_SUMMARY"],"a") as out:
+              out.write("## Falsification of import-only Git evidence reuse\n\n")
+              out.write(f"Preregistered historical comparisons: **{result['total_historical_revisions_requested']}**, "
+                        f"adversarial: **{result['total_adversarial_revisions']}**.\n\n")
+              out.write(f"Assessable: **{result['assessable_revisions']}**; "
+                        f"unassessable: **{result['unassessable_revisions']}**.\n\n")
+              out.write(f"Missed observable changes: **{result['missed_observable_changes']}**.\n\n")
+              out.write("| Repository | Assessable | Missed changes | Estimated savings |\n")
+              out.write("| --- | ---: | ---: | ---: |\n")
+              for c in result["per_repository"]:
+                  t=c["totals"]
+                  out.write(f"| {c['repository']} | {t['assessable']} | {t['misses']} | "
+                            f"{t['counterfactual_savings_fraction']} |\n")
+              out.write("\n")
+              out.write("Verdict: **"+("FALSIFIED" if result["hypothesis_falsified_by_soundness_counterexample"]
+                                     else "NOT FALSIFIED WITHIN CURRENT SCOPE")+"**.\n\n")
+              out.write("This is an observational test of the preregistered, import-only predictor. "
+                        "Neither historical behavior change nor intentional test mutations "
+                        "automatically imply production defects.\n\n")
+              out.write("Full report SHA-256: "+sha+".\n")
+          PY

@@ -40,7 +40,6 @@ def bind(source: Path, prior: Path, metadata: dict[str, Any],
     try:
         from consume import verified_bundle
         import manifest
-        digest_source = manifest.sha256
     finally:
         sys.path.remove(str(ci_path))
     dependencies = verified_bundle(source, prior, metadata)
@@ -69,7 +68,7 @@ def bind(source: Path, prior: Path, metadata: dict[str, Any],
     def digest(path: Path) -> str:
         return sha256(path.read_bytes()).hexdigest()
     claims = json.loads((prior / "claim-results.json").read_text())["claims"]
-    if {x["id"] for x in claims} < {READER, WRITER, COMPOSITION}:
+    if not {READER, WRITER, COMPOSITION}.issubset({x["id"] for x in claims}):
         raise ValueError("prior claims not present")
     run_id = metadata["id"]
     return {

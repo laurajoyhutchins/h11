@@ -75,11 +75,11 @@ declared loader and interpreter semantics.
 The pinned Lean proof contains the additional theorem
 `HexPreservation.sharedReaderCongruence`:
 
-[
-  W_{\text{new}}(x) = W_{\text{old}}(x)
-  \quad\Longrightarrow\quad
-  R(W_{\text{new}}(x)) = R(W_{\text{old}}(x)).
-]
+$
+W_{\text{new}}(x)=W_{\text{old}}(x)
+\quad\Longrightarrow\quad
+R(W_{\text{new}}(x))=R(W_{\text{old}}(x)).
+$
 
 Here `R` is **one shared pure reader function**. The theorem does not
 magically identify separate Python functions or assert that Python module

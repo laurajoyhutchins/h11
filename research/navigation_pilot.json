@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "method": "same deterministic BM25 ranker, source code vs published commit-summary excerpts",
+  "scope": "retrospective unblinded nine-question module location ranking, not a human or agent productivity study",
+  "source_documents": 11,
+  "history_documents": 8,
+  "source_top1": 6,
+  "history_top1": 7,
+  "source_top3": 8,
+  "history_top3": 9,
+  "source_mean_rank": 2.111,
+  "history_mean_rank": 1.333,
+  "questions": [
+    {
+      "question": "HTTP syntax token patterns and grammar",
+      "target": "_abnf.py",
+      "source_rank": 1,
+      "history_rank": 1
+    },
+    {
+      "question": "local and remote protocol validation errors",
+      "target": "_util.py",
+      "source_rank": 1,
+      "history_rank": 1
+    },
+    {
+      "question": "normalize case insensitive header field syntax",
+      "target": "_headers.py",
+      "source_rank": 1,
+      "history_rank": 1
+    },
+    {
+      "question": "request response message and data event classes",
+      "target": "_events.py",
+      "source_rank": 3,
+      "history_rank": 1
+    },
+    {
+      "question": "legal client server protocol state transitions",
+      "target": "_state.py",
+      "source_rank": 1,
+      "history_rank": 1
+    },
+    {
+      "question": "buffer fragmented input and scan for delimiters",
+      "target": "_receivebuffer.py",
+      "source_rank": 1,
+      "history_rank": 1
+    },
+    {
+      "question": "decode incoming chunked wire framing into events",
+      "target": "_readers.py",
+      "source_rank": 2,
+      "history_rank": 1
+    },
+    {
+      "question": "serialize outgoing events into wire bytes",
+      "target": "_writers.py",
+      "source_rank": 8,
+      "history_rank": 2
+    },
+    {
+      "question": "combine readers writers and state in the connection interface",
+      "target": "_connection.py",
+      "source_rank": 1,
+      "history_rank": 3
+    }
+  ],
+  "limitations": [
+    "Questions authored after seeing h11 and synthetic histories",
+    "History excerpts hand-selected from published commit messages",
+    "No timings or human/agent blinded comparison",
+    "Different corpus sizes and document lengths"
+  ]
+}

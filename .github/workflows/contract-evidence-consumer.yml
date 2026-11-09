@@ -1,0 +1,77 @@
+name: Selective evidence reuse consumer (bounded research pilot)
+
+on:
+  push:
+    branches: [research/native-contract-ci-evidence]
+    paths:
+      - research/ci_evidence/consume.py
+      - research/ci_evidence/test_consume.py
+      - .github/workflows/contract-evidence-consumer.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  consume:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      GH_TOKEN: ${{ github.token }}
+      # Frozen successful provenance-bearing producer run for this pilot.
+      BASELINE_RUN_ID: "42667731213"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install the same bounded native pytest environment
+        run: python -m pip install 'pytest==9.2.0'
+      - name: Test conservative REUSE/REVERIFY/UNKNOWN decisions and tamper refusals
+        run: PYTHONPATH=research/ci_evidence python -m unittest -v test_consume
+      - name: Retrieve prior evidence and authenticated GitHub run metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'REUSE_START_NS=%s\n' "$(date +%s%N)" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/previous"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$BASELINE_RUN_ID" > "$RUNNER_TEMP/run-info.json"
+          gh run download "$BASELINE_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name native-contract-evidence --dir "$RUNNER_TEMP/previous"
+      - name: Compare live source to authenticated verified baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          python research/ci_evidence/consume.py \
+            --prior-artifacts "$RUNNER_TEMP/previous" \
+            --trusted-run "$RUNNER_TEMP/run-info.json" \
+            --target-commit "$GITHUB_SHA" \
+            --output "$RUNNER_TEMP/reuse-decision.json"
+          printf 'REUSE_END_NS=%s\n' "$(date +%s%N)" >> "$GITHUB_ENV"
+      - name: Conditionally reverify rather than trusting unknown evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          verdict="$(python -c 'import json,sys;print(json.load(open(sys.argv[1]))["decision"])' "$RUNNER_TEMP/reuse-decision.json")"
+          if [ "$verdict" = REUSE ]; then
+            echo "Exact bounded prior evidence reused; native test run skipped."
+          else
+            echo "Not reusable ($verdict); run real tests."
+            python research/ci_evidence/run.py \
+              --expected-commit "$GITHUB_SHA" \
+              --output-dir "$RUNNER_TEMP/new-evidence"
+          fi
+      - name: Publish inspectable consumer decision
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-reuse-decision
+          path: |
+            ${{ runner.temp }}/reuse-decision.json
+            ${{ runner.temp }}/new-evidence/
+          if-no-files-found: warn
+          retention-days: 30

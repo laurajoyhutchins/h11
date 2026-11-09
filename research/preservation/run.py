@@ -87,6 +87,36 @@ def main() -> None:
     check(original, candidate, work, work / "candidate-observations.json",
           work / "preservation.json")
 
+    baseline_sha = subprocess.check_output(
+        ["git", "-C", str(original), "rev-parse", "HEAD"], text=True).strip()
+    candidate_sha = subprocess.check_output(
+        ["git", "-C", str(candidate), "rev-parse", "HEAD"], text=True).strip()
+    patch = subprocess.check_output(
+        ["git", "-C", str(candidate), "diff", "--binary",
+         baseline_sha, candidate_sha])
+    (work / "candidate.patch").write_bytes(patch)
+    evidence_command = [
+        sys.executable, str(original / "research/preservation/attest.py"),
+        "--work", str(work),
+        "--baseline", str(original), "--candidate", str(candidate),
+    ]
+    run(evidence_command[0], evidence_command[1], "emit", *evidence_command[2:],
+        cwd=original)
+    run(evidence_command[0], evidence_command[1], "verify", *evidence_command[2:],
+        cwd=original)
+
+    unsigned = work / "preservation.intoto.json"
+    correct = unsigned.read_bytes()
+    invalid = json.loads(correct)
+    invalid["predicate"]["result"] = "FAILED"
+    unsigned.write_text(json.dumps(invalid, sort_keys=True) + "\n")
+    run(evidence_command[0], evidence_command[1], "verify", *evidence_command[2:],
+        cwd=original, expect_failure=True)
+    unsigned.write_bytes(correct)
+    run(evidence_command[0], evidence_command[1], "verify", *evidence_command[2:],
+        cwd=original)
+
+
     probe(mutant, "candidate", work / "mutant-observations.json")
     check(original, mutant, work, work / "mutant-observations.json",
           work / "bad-preservation.json", expect_failure=True)
@@ -109,6 +139,8 @@ def main() -> None:
         "preserved_claims": [x["id"] for x in evidence["claims"]],
         "negative_mutation_refused": True,
         "forged_evidence_refused": True,
+        "altered_in_toto_status_refused": True,
+        "in_toto_statement_verified": True,
     }, indent=2, sort_keys=True))
 
 

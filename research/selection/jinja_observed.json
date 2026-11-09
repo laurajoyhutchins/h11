@@ -1,0 +1,197 @@
+{
+  "schema_version": 1,
+  "experiment": "frozen-prioritization",
+  "preregistration": "research/selection/jinja_preregistration.json",
+  "holdout": {
+    "repository": "pallets/jinja",
+    "commit": "5ef70112a1ff19c05324ff889dd30405b1002044",
+    "source_dir": "src",
+    "package": "jinja2",
+    "tests": [
+      "tests"
+    ],
+    "first_inspected_after_preregistration": true
+  },
+  "workflow": {
+    "url": "https://github.com/laurajoyhutchins/h11/actions/runs/42560558525",
+    "conclusion": "success",
+    "runtime": "ubuntu-24.04 Python 3.13",
+    "unit_tests": {
+      "selector": 8,
+      "source_discovery": 13,
+      "verifier": 10,
+      "total": 31,
+      "all_passed": true
+    }
+  },
+  "rubric": "test import exposure + downstream fan-in + bounded LOC proxy + boundary family bonus - closure cost - dynamic import penalty; greedy module/family novelty; budget 3; ties sorted candidate ID",
+  "statuses": "All selected and unselected candidates are INSUFFICIENT_EVIDENCE; no independent behavioral oracles were supplied",
+  "results": {
+    "h11": {
+      "modules": 11,
+      "all_candidates": 36,
+      "selection_sha256": "53025a294aae08ff200ccb3649707593e57ead72de79a74a86c76b5831b67488",
+      "selected": [
+        {
+          "id": "extension|h11._util.Sentinel|h11._state.CLIENT",
+          "family": "extension_boundary",
+          "modules": [
+            "h11._state",
+            "h11._util"
+          ],
+          "score": 33,
+          "test_import_witnesses": 7
+        },
+        {
+          "id": "test-module|h11._events",
+          "family": "test_exercised_module_closure",
+          "modules": [
+            "h11._events"
+          ],
+          "score": 30,
+          "test_import_witnesses": 6
+        },
+        {
+          "id": "extension|h11._util.Sentinel|h11._connection.NEED_DATA",
+          "family": "extension_boundary",
+          "modules": [
+            "h11._connection",
+            "h11._util"
+          ],
+          "score": 28,
+          "test_import_witnesses": 7
+        }
+      ]
+    },
+    "itsdangerous": {
+      "modules": 8,
+      "all_candidates": 20,
+      "selection_sha256": "e5a5aa494c72cf8b58fc4a3a92059e5f4854a1f162c6b735c70b8b66f9066e56",
+      "selected": [
+        {
+          "id": "extension|itsdangerous.signer.Signer|itsdangerous.timed.TimestampSigner",
+          "family": "extension_boundary",
+          "modules": [
+            "itsdangerous.signer",
+            "itsdangerous.timed"
+          ],
+          "score": 28,
+          "test_import_witnesses": 3
+        },
+        {
+          "id": "test-module|itsdangerous.exc",
+          "family": "test_exercised_module_closure",
+          "modules": [
+            "itsdangerous.exc"
+          ],
+          "score": 27,
+          "test_import_witnesses": 4
+        },
+        {
+          "id": "test-module|itsdangerous.signer",
+          "family": "test_exercised_module_closure",
+          "modules": [
+            "itsdangerous.signer"
+          ],
+          "score": 22,
+          "test_import_witnesses": 3
+        }
+      ]
+    },
+    "click": {
+      "modules": 17,
+      "all_candidates": 56,
+      "selection_sha256": "440d8d66509b278e7ed661dfeb056e0911f25ac59decdeab930d6a04358cab16",
+      "selected": [
+        {
+          "id": "test-module|click._compat",
+          "family": "test_exercised_module_closure",
+          "modules": [
+            "click._compat"
+          ],
+          "score": 30,
+          "test_import_witnesses": 8
+        },
+        {
+          "id": "extension|click.core.Command|click.core.Group",
+          "family": "extension_boundary",
+          "modules": [
+            "click.core"
+          ],
+          "score": 26,
+          "test_import_witnesses": 4
+        },
+        {
+          "id": "test-module|click._utils",
+          "family": "test_exercised_module_closure",
+          "modules": [
+            "click._utils"
+          ],
+          "score": 25,
+          "test_import_witnesses": 6
+        }
+      ]
+    },
+    "jinja": {
+      "modules": 25,
+      "all_candidates": 124,
+      "selection_sha256": "55476d70d0d523e7b71b7bf6c13d68c2f1da7eac303c26970557da1dcd424cdf",
+      "selected": [
+        {
+          "id": "extension|jinja2.environment.Environment|jinja2.nativetypes.NativeEnvironment",
+          "family": "extension_boundary",
+          "modules": [
+            "jinja2.environment",
+            "jinja2.nativetypes"
+          ],
+          "score": 26,
+          "test_import_witnesses": 4
+        },
+        {
+          "id": "test-module|jinja2.nodes",
+          "family": "test_exercised_module_closure",
+          "modules": [
+            "jinja2.nodes"
+          ],
+          "score": 23,
+          "test_import_witnesses": 4
+        },
+        {
+          "id": "extension|jinja2.environment.Environment|jinja2.sandbox.SandboxedEnvironment",
+          "family": "extension_boundary",
+          "modules": [
+            "jinja2.environment",
+            "jinja2.sandbox"
+          ],
+          "score": 22,
+          "test_import_witnesses": 4
+        }
+      ]
+    }
+  },
+  "control": {
+    "repository": "pallets/jinja",
+    "no_oracles": true,
+    "total_candidates": 124,
+    "insufficient_evidence_count": 124,
+    "source_mismatches": 0,
+    "repeated_selection_byte_identical": true,
+    "original_checkout_clean": true
+  },
+  "known_reference_miss": {
+    "repository": "laurajoyhutchins/h11",
+    "known_independently_verified_boundary": "h11._connection|h11._readers|h11._writers",
+    "selected_top3": false,
+    "interpretation": "Structural importance score does not reliably prioritize a previously demonstrated codec contract; this is a diagnostic failure of usefulness, not a software execution failure."
+  },
+  "limitations": [
+    "Only one new holdout after preregistration",
+    "No independent oracles on Jinja",
+    "Original test import does not establish behavioral coverage",
+    "Inheritance can reflect implementation mechanics rather than meaningful contracts",
+    "Line count and downstream reach are unvalidated prioritization proxies",
+    "Large source modules and high-traffic sentinel types can dominate scoring",
+    "No human or agent comparison or measured return on verification work",
+    "No source changes to external repositories; report and selector remain on research evidence branch"
+  ]
+}

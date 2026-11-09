@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "kind": "blind-transfer-preregistration",
+  "target": {
+    "repository": "pallets/itsdangerous",
+    "commit": "672971d66a2ef9f85151e53283113f33d642dabd",
+    "source_layout": "src/itsdangerous",
+    "tests_layout": "tests/test_itsdangerous"
+  },
+  "baseline_method": "Run pinned upstream pytest tests with Python 3.13, pytest, freezegun; no source edits.",
+  "discovery_method": "Existing discover() ranking and candidate criteria unchanged; add only generic support for src/ layouts and root-level tests",
+  "selection_method": "Select source modules by exact test_<module>.py basename match, sorted lexicographically, all matches; select 2 function-level AST conditional mutants per eligible module by stable SHA-256 order; no hand-picked contract families or lines.",
+  "verification_method": "Baseline original tests, then targeted test file against each mutation, classify detected/survived/invalid, restore source and verify Git tree. Original tests are not independent semantic specifications, so report test sensitivity only.",
+  "acceptance": {
+    "source_snapshot_unchanged": true,
+    "discovery_output_recorded_even_if_zero_candidates": true,
+    "no_invented_contracts": true,
+    "failures_and_mutant_survivors_reported": true,
+    "successful_baseline_required_before_mutations": true
+  },
+  "notes": [
+    "Repo and commit selected before inspecting its source and prior to any trial execution",
+    "Target supports src/ layout which the original h11-specific CLI did not",
+    "No mutation of target remote or Git history is authorized"
+  ]
+}

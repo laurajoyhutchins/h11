@@ -107,6 +107,7 @@ def certificate(data: dict, work: Path) -> dict:
             },
             {
                 "id": "http1.chunked.composition",
+                "formal_composition_theorem": "HexPreservation.sharedReaderCongruence",
                 "status": "FINITE_COMPOSITION_CARRIED_IN_SEALED_READER_CONTEXT",
                 "original_run": prior["verified_run_id"],
                 "original_cases_preserved_conditionally": 24,
@@ -152,6 +153,7 @@ def statement(cert: dict, work: Path) -> dict:
         "Lean4.35.0/bitwiseDigits_eq_toDigits",
         "Lean4.35.0/chunkTrace_eq_for_all_payloads",
         "Lean4.35.0/messageTrace_eq_for_all_inputs",
+        "Lean4.35.0/sharedReaderCongruence",
         "baseline-Python-AST-matches-formal-model",
         "candidate-Python-AST-matches-formal-model",
         "source-Git-diff-is-restricted",

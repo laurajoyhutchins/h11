@@ -18,6 +18,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 from typing import Any
 
 READER_ROOT = "_readers"
@@ -154,6 +155,12 @@ def verify_observations(frame: dict, observed: dict, prior: dict) -> dict:
         or len(observed.get("cases", [])) != 24
         or observed.get("prior_verified_run_id") != prior["verified_run_id"]):
         raise ValueError("sealed reader observation is incomplete or inconsistent")
+    expected_cases = {(name, step) for name in
+                      ("legacy-empty", "legacy-single", "legacy-trailers", "legacy-binary")
+                      for step in (1, 2, 3, 7, 64, 1024)}
+    actual_cases = {(x.get("input"), x.get("segment")) for x in observed["cases"]}
+    if len(actual_cases) != 24 or actual_cases != expected_cases:
+        raise ValueError("missing, duplicate, or unsupported sealed reader test case")
     if any(x.get("status") != "PASSED" for x in observed["cases"]):
         raise ValueError("sealed reader baseline did not reproduce a prior case")
     return {
@@ -186,17 +193,43 @@ def verify_observations(frame: dict, observed: dict, prior: dict) -> dict:
     }
 
 
+def reexecute_baseline(baseline: Path, baseline_observations: Path,
+                       prior_reference: Path, recorded: dict) -> None:
+    """Independently regenerate sealed baseline results, never candidate reader."""
+    with tempfile.TemporaryDirectory(prefix="h11-sealed-replay-") as tmp:
+        regenerated = Path(tmp) / "sealed-observations.json"
+        completed = subprocess.run(
+            [sys.executable, "-I",
+             str(baseline / "research/preservation/sealed_reader.py"),
+             "--baseline", str(baseline),
+             "--baseline-observations", str(baseline_observations),
+             "--prior-reference", str(prior_reference),
+             "--output", str(regenerated)],
+            cwd=baseline, capture_output=True, text=True, check=False,
+            timeout=90,
+        )
+        if completed.returncode:
+            raise ValueError("sealed baseline reader replay failed: " +
+                             (completed.stderr + completed.stdout)[-1200:])
+        fresh = json.loads(regenerated.read_text())
+        if fresh != recorded:
+            raise ValueError("sealed reader observations differ from actual replay")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--baseline", type=Path, required=True)
     parser.add_argument("--candidate", type=Path, required=True)
     parser.add_argument("--observations", type=Path, required=True)
+    parser.add_argument("--baseline-observations", type=Path, required=True)
     parser.add_argument("--prior", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     frame = source_frame(args.baseline, args.candidate)
     observed = json.loads(args.observations.read_text())
     prior = json.loads(args.prior.read_text())
+    reexecute_baseline(args.baseline.resolve(), args.baseline_observations.resolve(),
+                       args.prior.resolve(), observed)
     certificate = verify_observations(frame, observed, prior)
     args.output.write_text(json.dumps(certificate, sort_keys=True, indent=2) + "\n")
     print("READER_FRAME_PROVED", len(frame["declared_modules"]),

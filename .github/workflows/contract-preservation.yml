@@ -1,0 +1,49 @@
+name: Contract preservation under writer transformation
+
+on:
+  push:
+    branches: [research/contract-preservation]
+    paths:
+      - .github/workflows/contract-preservation.yml
+      - research/preservation/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-finite-refinement:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Unit-test evidence and AST proof obligations
+        run: |
+          PYTHONPATH=research/preservation python -m unittest \
+            discover -s research/preservation -p 'test_*.py' -v
+      - name: Make local Git rewrite, replay real h11, and check downstream preservation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/preservation"
+          python research/preservation/run.py \
+            --source . \
+            --work "$RUNNER_TEMP/preservation"
+      - name: Save independently inspectable witness and proof obligations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: finite-contract-preservation
+          path: |
+            ${{ runner.temp }}/preservation/baseline-observations.json
+            ${{ runner.temp }}/preservation/candidate-observations.json
+            ${{ runner.temp }}/preservation/mutant-observations.json
+            ${{ runner.temp }}/preservation/preservation.json
+          if-no-files-found: warn
+          retention-days: 30

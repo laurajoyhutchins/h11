@@ -139,7 +139,8 @@ def execute(repo, ref, contract, mutation=None):
             raise AssertionError(f"Contract {kind} failed unexpectedly:\n{result.stderr[-2000:]}")
         if mutation is not None and (result.returncode==0 or
                 "ImportError:" in result.stderr or "ModuleNotFoundError:" in result.stderr or
-                "SyntaxError:" in result.stderr):
+                "SyntaxError:" in result.stderr or
+                not any(marker in result.stderr for marker in ("AssertionError", "h11._util.LocalProtocolError", "h11._util.RemoteProtocolError"))):
             raise AssertionError(f"Mutant {kind}/{mutation} survived or broke the harness:\n{result.stderr[-2000:]}")
         return {"contract":contract["id"],"checkpoint":ref,"mutant":mutation,
                 "result":"PASS" if mutation is None else "KILLED"}

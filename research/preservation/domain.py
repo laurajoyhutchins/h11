@@ -35,7 +35,23 @@ def corpus() -> list[dict]:
         lengths = [rng.randrange(0, 260) for _ in range(rng.randrange(0, 5))]
         chunks = [bytes(rng.randrange(256) for _ in range(n)) for n in lengths]
         insert(chunks, [(b"x-case", b"random")] if rng.randrange(2) else [])
-    assert len(cases) == 108
+    # These four cases are byte-for-byte the input event fixtures used by
+    # research/ci_evidence/test_roundtrip.py in the previous in-toto run.
+    # They form a bridge from earlier finite observations to the new writer.
+    legacy = (
+        ("legacy-empty", (), ()),
+        ("legacy-single", (b"a",), ()),
+        ("legacy-trailers", (b"abc", b"", b"defghi"), ((b"x-note", b"done"),)),
+        ("legacy-binary", (b"\x00\r\n\xff", b"Z" * 100),
+         ((b"etag", b"xyz"), (b"x-k", b"v"))),
+    )
+    for name, payloads, trailers in legacy:
+        cases.append({
+            "id": name,
+            "payloads": [part.hex() for part in payloads],
+            "trailers": [[key.hex(), value.hex()] for key, value in trailers],
+        })
+    assert len(cases) == 112
     return cases
 
 
